@@ -1,6 +1,12 @@
 #!/usr/bin/env python
 """
 Auxiliary program for controlling the UGV movements through keyboard.
+
+The module makes a reading of the keyboard, and from the movement
+chosen by the user, publish new speed in the topic '/robot_{}/cmd_vel'.
+
+For the correct operation of the module, it is necessary that the
+keyboard delay in the operating system is less than 250 ms.
 """
 # Standard libraries
 import termios

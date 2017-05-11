@@ -1,11 +1,11 @@
 #!/usr/bin/env python
-""" 
+"""
 Routine for getting UGV poses and publishing to speed topic
 
 The module instantiates a RobotController object and uses its methods
 for publishing new speed set points in the topic '/robot_{}/cmd_vel'.
 
-When calling the module, one argument must be passed, representing the 
+When calling the module, one argument must be passed, representing the
 id of the desired robot. It must be the same as the one passed to the
 messenger.py module.
 """
@@ -54,7 +54,7 @@ def make_a_rectangle(my_robot):
 def main():
     # This exception forces to give the robot_id argument within run command.
     rectangle_path = False
-    help_msg = ('Usage: move_robot.py [-r <robot_id>], [--robotid=<robot_id>], '
+    help_msg = ('Usage: controller.py [-r <robot_id>], [--robotid=<robot_id>], '
                 '[--rectangle]')
     try:
         opts, args = getopt.getopt(sys.argv[1:], "hr:", ["robotid=",
@@ -69,11 +69,15 @@ def main():
         if opt == '-h':
             print help_msg
             sys.exit()
-        elif opt in ("-r", "--robotid"):
-            robot_id = int(arg)
-        elif opt == "--rectangle":
-            rectangle_path = True
-    # Calls the main function  
+        else:
+            if opt in ("-r", "--robotid"):
+                robot_id = int(arg)
+            else:
+                print help_msg
+                sys.exit()
+            if opt == "--rectangle":
+                rectangle_path = True
+    # Calls the main function
     my_robot = RobotController(robot_id)
     new_node(my_robot, robot_id)
     # Until the first pose is not published, the robot instance

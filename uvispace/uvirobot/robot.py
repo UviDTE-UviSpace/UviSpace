@@ -1,10 +1,10 @@
 #!/usr/bin/env python
 """This module communicates with user and sensors for finding paths.
 
-It contains a class, *RobotController*, that represents a real UGV, and 
-contains ROS functionality for publishing new speed values, UGV's 
-attributes, such as the *robot_id*, its speed values, or an instance 
-of the *PathTracker*, for calculating and storing the robot navigation 
+It contains a class, *RobotController*, that represents a real UGV, and
+contains ROS functionality for publishing new speed values, UGV's
+attributes, such as the *robot_id*, its speed values, or an instance
+of the *PathTracker*, for calculating and storing the robot navigation
 values.
 """
 # ROS libraries
@@ -27,6 +27,7 @@ class RobotController(object):
         self.init = False
         self.speeds = Twist()
         self.QCTracker = path_tracker.QuadCurveTracker()
+        self.terminated = False
         self.pub_vel = rospy.Publisher('/robot_{}/cmd_vel'.format(robot_id),
                                        Twist, queue_size=1)
 
@@ -34,12 +35,12 @@ class RobotController(object):
         """
         Receives a new pose and calculates the UGV speeds.
 
-        After calculating the new speed value, it is published on the 
-        rostopic *'/robot_X/cmd_vel'* using the *pub_vel* object. 
-        Only the values X, Y and theta of the *Pose2D* type are used, as 
+        After calculating the new speed value, it is published on the
+        rostopic *'/robot_X/cmd_vel'* using the *pub_vel* object.
+        Only the values X, Y and theta of the *Pose2D* type are used, as
         the designed Space consists in a 2-D flat space.
 
-        :param pose: contains a 2-D position, with 2 cartesian values 
+        :param pose: contains a 2-D position, with 2 cartesian values
          (x,y) and an angle value (theta).
         :type pose: gemoetry_msgs.Pose2D
         """
@@ -59,13 +60,13 @@ class RobotController(object):
         """
         Receives a new goal and calculates the path to reach it.
 
-        :param goal: contains a 2-D position, with 2 cartesian 
+        :param goal: contains a 2-D position, with 2 cartesian
          values (x,y) and an angle value (theta).
         :type goal: geometry_msgs.Pose2D
         """
         if self.init:
             goal_point = (goal.x, goal.y)
-            # Adds the new goal to the current path, calculating all the 
+            # Adds the new goal to the current path, calculating all the
             # intermediate points and stacking them to the path array
             self.QCTracker.append_point(goal_point)
             rospy.loginfo('New goal--> X: {}, Y: {}'.format(goal.x, goal.y))
@@ -78,3 +79,4 @@ class RobotController(object):
         self.speeds.linear.x = 0.0
         self.speeds.angular.z = 0.0
         self.pub_vel.publish(self.speeds)
+        self.terminated = True
