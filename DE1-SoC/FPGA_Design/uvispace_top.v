@@ -192,7 +192,7 @@ module uvispace_top(
 
 //HPS signals
 wire    hps2fpga_reset_n;
-wire 	  camera_soft_reset_n;
+wire 	  hps_software_reset_n;
 wire 	  video_stream_reset_n;
 wire    clk_25;
 wire    clk_193;
@@ -258,7 +258,7 @@ soc_system u0 (
   .avalon_camera_export_rowsize          ( in_row_size ),
   .avalon_camera_export_colsize          ( in_column_size ),
   .avalon_camera_export_rowmode          ( in_row_mode ),
-  .avalon_camera_export_soft_reset_n     ( camera_soft_reset_n ),
+  .avalon_camera_export_soft_reset_n     ( hps_software_reset_n ),
   // Bus for the image_capture component to write images in HPS-OCR
   .avalon_write_bridge_0_avalon_slave_address     ( image_capture_address ),  
   .avalon_write_bridge_0_avalon_slave_write       ( image_capture_write ),     
@@ -396,7 +396,7 @@ camera_capture u3(
   assign  CCD_FVAL     =  GPIO_1[22]; //frame valid
   assign  CCD_LVAL     =  GPIO_1[21]; //line valid
   assign  ccd_pixel_clk=  GPIO_1[0];  //Pixel clock
-  assign  GPIO_1[19]   =  1'b1;       //trigger
+  assign  GPIO_1[19]   =  ready;       //trigger
   assign  GPIO_1[17]   =  camera_reset_n;
 
   // Refreshes the data on the CCD camera on every pixel clock pulse.
@@ -669,7 +669,7 @@ camera_config #(
   .column_size(in_column_size),
   .row_mode(in_row_mode),
   .column_mode(in_column_mode),
-  .cam_restart(!sync_soft_reset_n),
+  .cam_restart(),
   // Ready signal
   .out_ready(ready),
   // I2C Side
@@ -696,12 +696,12 @@ camera_config #(
 
 wire camera_reset_n;
 // Synchronization of the software reset with the pixel clock.
-reg sync_soft_reset_n;
+reg sync_hps_soft_reset_n;
 always @(posedge ccd_pixel_clk) begin
-  sync_soft_reset_n = camera_soft_reset_n;
+  sync_hps_soft_reset_n = hps_software_reset_n;
 end
 // Reset logic
-assign video_stream_reset_n = (sync_soft_reset_n & KEY[0]);
-assign camera_reset_n = KEY[0];
+assign video_stream_reset_n = camera_reset_n;
+assign camera_reset_n = (KEY[0] & sync_hps_soft_reset_n);
 
 endmodule
