@@ -258,6 +258,7 @@ module rgb2hue(
     reg visual4;
     reg done4;
     // Color
+    reg [7:0] max_value4;
     reg [11:0] hue4;
     reg [7:0] dif4;
     reg [1:0] max_index4;
@@ -269,6 +270,7 @@ module rgb2hue(
             green4[7:0] <= green3[7:0];
             blue4[7:0] <= blue3[7:0];
             visual4 <= visual3;
+            max_value4 <= max_value3;
             done4 <= done3;          
             dif4[7:0] <= dif3[7:0];
             max_index4 <= max_index3;
@@ -299,6 +301,7 @@ module rgb2hue(
     reg [7:0] blue5;
     reg visual5;
     reg done5;
+    reg [7:0] max_value5;
     // Color
     reg [11:0] hue5;
     always @(posedge clock)
@@ -308,6 +311,7 @@ module rgb2hue(
             red5[7:0] <= red4[7:0];
             green5[7:0] <= green4[7:0];
             blue5[7:0] <= blue4[7:0];
+            max_value5 <= max_value4;
             visual5 <= visual4;
             done5 <= done4;
             if (dif4 > 0) begin
@@ -373,7 +377,10 @@ module rgb2hue(
             blue[7:0] <= blue5[7:0];
             visual <= visual5;
             done <= done5;
-            hue[18:0] <= (85 * hue5);
+            if (max_value5 > 9'd50)
+                hue[18:0] <= (85 * hue5);
+            else
+                hue[18:0] <= 19'd0;
         end
         else begin 
             valid <= 1'b0;
