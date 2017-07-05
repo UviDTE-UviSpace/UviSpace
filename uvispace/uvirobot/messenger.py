@@ -108,7 +108,7 @@ def listen_speed_set_points(my_serial, robot_id, robot_speed, speed_calc_times,
 
 
 def move_robot(data, my_serial, wait_times, speed_calc_times, xbee_times,
-               robot_speed, min_speed=70, max_speed=190):
+               robot_speed, min_speed=70, max_speed=240):
     """Convert speed msg into 2WD value and send it through port."""
     global t0
     global t1
@@ -142,8 +142,9 @@ def read_battery_soc(my_serial):
     soc = ""
     if raw_soc is not None:
         # The soc variable are 4 bytes, but the data is stored on the last 2.
-        soc = struct.unpack('>H', raw_soc[-2:])[0]
-        logger.info("The current battery SOC is {}%".format(soc))
+        #soc = struct.unpack('>H', raw_soc[-2:])[0]
+        soc = struct.unpack('>H', raw_soc[1]+raw_soc[3])[0]
+        logger.info("The current battery soc is {}%".format(soc))
     else:
         logger.warn("Unable to get the battery state of charge")
     return soc
