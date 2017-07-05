@@ -57,10 +57,18 @@ class SerMesProtocol(Serial):
     # slave-to-master function codes
     ACK_MSG = '\x01'
     SOC_MSG = '\x02'
+    V_MSG = '\x03'
+    R_CAP_MSG = '\x04'
+    TEMP_MSG = '\x05'
+    CURR_MSG = '\x06'
     # master-to-slave function codes
     READY = '\x04'
     MOVE = '\x05'
     GET_SOC = '\x06'
+    GET_V = '\x07'
+    GET_R_CAP = '\x08'
+    GET_TEMP = '\x09'
+    GET_CURR = '\x0A'
 
     def __init__(self, port,
                  baudrate,
