@@ -1,12 +1,11 @@
 #!/usr/bin/env python
 """
-Auxiliary program for reading, analyzing and writing data of poses and time.
+Auxiliary program for manipulate data of poses and time.
 
 This module allows:
 -Read data of poses with their respective time, from a spreadsheet.
--Read data directly from an array of float32 Nx4.
--Analyze data by calculating differential values of position, time and lenght
- displaced and average speed of UGV
+-Analyze data by calculating differential values of position, time and
+ lenght displaced and average speed of UGV
 -Save data in spreadsheet and textfile.
 -Save final data in master sheet.
 """
@@ -21,6 +20,129 @@ import sys
 import time
 # Excel read/write library
 import openpyxl
+
+
+class Analyze_data(object):
+    """
+    Receives poses and time of matrix to analyze.
+
+    Different time and position values are calculated between two data
+    points.
+    From these, the displaced length and the average speed of UGV are
+    calculated.
+
+    :param data: Matrix of floats64 with data.
+    """
+
+    def __init__(self, data=np.array([0, 0, 0, 0]).astype(np.float64)):
+
+        self.data = np.array([0, 0, 0, 0]).astype(np.float64)
+        self._diff_data = np.array([0, 0, 0, 0, 0, 0, 0, 0]).astype(np.float64)
+        self._avg_speed = 0
+        self._avg_ang_speed = 0
+
+    def erase_same_poses(self, data):
+        # New data is correct when at least one value of pose are different.
+        rows, cols = data.shape
+        # Initialization of arrays to format data.
+        last_data = np.array([0, 0, 0, 0]).astype(np.float64)
+        new_data = np.array([0, 0, 0, 0]).astype(np.float64)
+        for x in range (0, rows):
+            different_values = False
+            for y in range (0, cols):
+                new_data[y] = data[x,y]
+                if y > 0 :
+                    if new_data[y] != last_data [y]:
+                        different_values = True
+            if different_values:
+                last_data = np.copy(new_data)
+                if x == 0:
+                    # Initialization formatted_data array.
+                    formatted_data = np.copy(new_data)
+                else:
+                    formatted_data = np.vstack([formatted_data, new_data])
+        self.data = np.copy(formatted_data)
+        return formatted_data
+
+    def erase_stop_poses(self, data):
+        # Data erase with UGV stopped.
+        rows, cols = data.shape
+        # Initial repeated data calculation.
+        pos_x_upper = data[0:20, 1]
+        mode_pos_x_upper = stats.mode(pos_x_upper)
+        pos_y_upper = data[0:20, 2]
+        mode_pos_y_upper = stats.mode(pos_y_upper)
+        # Final repeated data calculation.
+        pos_x_lower = data[(rows-20):rows, 1]
+        mode_pos_x_lower = stats.mode(pos_x_lower)
+        pos_y_lower = data[(rows-20):rows, 2]
+        mode_pos_y_lower = stats.mode(pos_y_lower)
+        # Determination of rows UGV data in motion.
+#conditions = np.any(data!=moda, axis=1)
+#indexes = np.where(conditions)[0]
+#filtered_data = data[indexes[0]-1:indexes[1]+2, :]
+        row_upper = 0
+        row_lower = rows
+        for x in range(0, rows):
+            if (data[x,1] == mode_pos_x_upper[0] and
+                data[x,2] == mode_pos_y_upper[0]):
+                row_upper = x
+            if (data[x,1] == mode_pos_x_lower[0] and
+                data[x,2] == mode_pos_y_lower[0]):
+                row_lower = x + 1
+                break
+                # UGV data in motion.
+        clipped_data = data[row_upper:row_lower, :]
+        self.data = np.copy(clipped_data)
+        return clipped_data
+
+    def get_diff_data(self, data):
+        # Calculate differential values.
+        rows, cols = data.shape
+        work_data = np.copy(data)
+        #First sample, time zero.
+        work_data[:, 0] -= work_data[0, 0]
+        #Differential data matrix: current data minus previous data.
+        diff_data = np.zeros_like(work_data)
+        #Vector differential angle speed.
+        diff_angle_speed = np.zeros(rows)
+        diff_data[1:rows, :] = work_data[1:rows, :] - work_data[0:(rows-1), :]
+        #Vector differential length displaced.
+        diff_length = np.sqrt(diff_data[:,1] ** 2 + diff_data[:,2] ** 2)
+        speed_angles = np.arctan2(diff_data[:,2], diff_data[:,1])
+        # The direction is negative when the speed angle and vehicle angle
+        # difference is bigger than pi/2 (90 degrees).
+        sign_spd = np.ones([rows, 1])
+        sign_spd[np.abs(work_data[:,3]-speed_angles) > (np.pi/2)] *= -1
+        diff_speed = sign_spd[1:,0] * 1000 * diff_length[1:]/diff_data[1:,0]
+        diff_speed = np.hstack([0, diff_speed])
+#    for x in range(1, rows):
+#        cos_alpha[x] = diff_data[x,1] / diff_length[x]
+#        cos_thetha[x] = math.cos(data[x,3])
+#        sign_spd[x] = math.sign(cos_thetha[x]/cos_alpha[x])
+#        if diff_data[x,0] != 0:
+#            #Speed in millimeters/second.
+#            diff_speed[x] = ((sign_spd[x] * diff_length[x]) / diff_data[x,0]) * 1000
+        diff_angle_speed[1:rows] = 1000 * diff_data[1:rows, 3]/diff_data[1:rows, 0]
+        #Complete data matrix with new data.
+#    np.hstack([diff_data[4], diff_length])
+        diff_data = np.insert(diff_data, 4, diff_length, axis=1)
+        diff_data = np.insert(diff_data, 5, diff_speed, axis=1)
+        diff_data = np.insert(diff_data, 6, diff_angle_speed, axis=1)
+        work_data = np.hstack([work_data, diff_data])
+        #Average speed and average angle speed for masterfile txt.
+        rows, cols = work_data.shape
+        sum_data = diff_data.sum(axis=0)
+        length = math.sqrt(((work_data[rows-1,1] - work_data [0, 1])**2)+((work_data[rows-1,2] - work_data [0, 2])**2))
+        sum_data = diff_data.sum(axis=0)
+        avg_speed = np.round((1000*length/sum_data[0]), 2)
+        avg_ang_speed = np.round(((1000*(work_data[rows-1,3] - work_data [0, 3]))/sum_data[0]), 2)
+        #If you want to save to master file boolean True.
+        formatted_data = np.round(work_data, 2)
+        self._diff_data = np.copy(formatted_data)
+        self._avg_speed = avg_speed
+        self._avg_ang_speed = avg_ang_speed
+        return formatted_data, avg_speed, avg_ang_speed
 
 def format_spreadsheet(cell):
     """
@@ -68,22 +190,17 @@ def format_spreadsheet(cell):
                                                   end_color='FFFFFFFF')
     return format_cell
 
-def read_data(name_spreadsheet="datatemp/31_05_2017_61-L160-R210.xlsx",
-              save=True, analyze=True):
+def read_data(name_spreadsheet="31_05_2017_201-L255-R255.xlsx"):
     """It allows to read poses and time of spreadsheet.
 
-    These data are stored in the "data" matrix. They can be analyzed
-    and/or saved later in a text file and/or in a spreadsheet.
+    These data are stored in the "data" matrix.
 
-    Each group of data is composed to 4 elements: time, position "x",
-    position "y" and angle "theta".
+    Each group of data is composed to 4 elements about the location of
+    the UGV at a given time: time, position "x", position "y" and angle
+    "theta".
 
     :param str name_spreadsheet: name of spreadsheet that contain the
     data to be read.
-    :param bool save: boolean that allows you to save the data later if
-    it is true.
-    :param bool analyze: boolean that allows you to analyze the data
-    later if it is true.
     :returns: matrix dimentions Mx4 with read data. M is the number of
     rows corresponding to the number of data read.
     :rtype: numpy.array(shape=Mx4)
@@ -96,7 +213,6 @@ def read_data(name_spreadsheet="datatemp/31_05_2017_61-L160-R210.xlsx",
     ws = wb.active
     # Initialization of matrixes for data.
     data = np.array([0, 0, 0, 0]).astype(np.float64)
-    last_data = np.array([0, 0, 0, 0]).astype(np.float64)
     new_data = np.array([0, 0, 0, 0]).astype(np.float64)
     # Rows 1 and 2 are for the file name, the next three rows describe the
     # experiment parameters, and the 6 is the header in any type file.
@@ -113,30 +229,18 @@ def read_data(name_spreadsheet="datatemp/31_05_2017_61-L160-R210.xlsx",
         if element == 'Sum differential data:':
             data_in_this_row = False
         else:
-            # New data is correct when the 3 values ​​of pose are different, when
-            # different_values is 3.
-            different_values = 0
+            # Reading data.
             for y in range (0, cols):
                 element = ws.cell(column=y+1, row=row).value
                 new_data[y] = element
-                if y > 0 :
-                    if new_data[y] != last_data [y]:
-                        different_values += 1
-            if different_values == 3:
-                last_data = np.copy(new_data)
+            if row == 7:
+                # Substitution of row of zeros by first row of data read.
+                data = np.copy(new_data)
+            else:
                 data = np.vstack([data, new_data])
             row +=1
-    formatted_data = np.round(data, 2)
-    #Call to save and analyze data.
-    #TODO revisar!!!! INCOMPLETO
-    if analyze:
-        analyzed_data = analyze_data(formatted_data)
-        data_to_returned = analyzed_data
-    else:
-        data_to_returned = formatted_data
-    if save_data:
-        save_data(name_spreadsheet, data_to_returned)
-    return formatted_data
+    rounded_data = np.round(data, 2)
+    return rounded_data
 
 def save_data(data, analyze=False):
     """
@@ -228,84 +332,7 @@ def save_data(data, analyze=False):
                                     avg_ang_speed])
         save2master_txt(data_master_txt)
 
-def analyze_data(data):
-    """
-    Receives poses and time of matrix to analyze.
 
-    Different time and position values are calculated between two data points.
-    From these, the displaced length and the average speed of UGV are calculated.
-
-    :param data: Matrix of floats64 with data.
-    """
-    rows, cols = data.shape
-    #Data erase with UGV stopped.
-    #Initial repeated data calculation.
-    pos_x_upper = data[0:20, 1]
-    mode_pos_x_upper = stats.mode(pos_x_upper)
-    pos_y_upper = data[0:20, 2]
-    mode_pos_y_upper = stats.mode(pos_y_upper)
-    #Final repeated data calculation.
-    pos_x_lower = data[(rows-20):rows, 1]
-    mode_pos_x_lower = stats.mode(pos_x_lower)
-    pos_y_lower = data[(rows-20):rows, 2]
-    mode_pos_y_lower = stats.mode(pos_y_lower)
-    #Determination of rows UGV data in motion.
-#conditions = np.any(data!=moda, axis=1)
-#indexes = np.where(conditions)[0]
-#filtered_data = data[indexes[0]-1:indexes[1]+2, :]
-    row_upper = 0
-    row_lower = rows
-    for x in range(0, rows):
-        if data[x,1] == mode_pos_x_upper[0] and data[x,2] == mode_pos_y_upper[0]:
-            row_upper = x
-        if data[x,1] == mode_pos_x_lower[0] and data[x,2] == mode_pos_y_lower[0]:
-            row_lower = x + 1
-            break
-    # #UGV data in motion.
-    clipped_data = data[row_upper:row_lower, :]
-    rows, cols = clipped_data.shape
-    #First sample, time zero.
-    clipped_data[:, 0] -= clipped_data[0, 0]
-    #Differential data matrix: current data minus previous data.
-    diff_data = np.zeros_like(clipped_data)
-    #Vector differential angle speed.
-    diff_angle_speed = np.zeros(rows)
-    diff_data[1:rows, :] = clipped_data[1:rows, :] - clipped_data[0:(rows-1), :]
-    #Vector differential length displaced.
-    diff_length = np.sqrt(diff_data[:,1] ** 2 + diff_data[:,2] ** 2)
-    speed_angles = np.arctan2(diff_data[:,2], diff_data[:,1])
-    # The direction is negative when the speed angle and vehicle angle difference
-    # is bigger than pi/2 (90 degrees).
-    sign_spd = np.ones([rows, 1])
-    sign_spd[np.abs(clipped_data[:,3]-speed_angles) > (np.pi/2)] *= -1
-    diff_speed = sign_spd[1:,0] * 1000 * diff_length[1:]/diff_data[1:,0]
-    diff_speed = np.hstack([0, diff_speed])
-#    for x in range(1, rows):
-#        cos_alpha[x] = diff_data[x,1] / diff_length[x]
-#        cos_thetha[x] = math.cos(data[x,3])
-#        sign_spd[x] = math.sign(cos_thetha[x]/cos_alpha[x])
-#        if diff_data[x,0] != 0:
-#            #Speed in millimeters/second.
-#            diff_speed[x] = ((sign_spd[x] * diff_length[x]) / diff_data[x,0]) * 1000
-    diff_angle_speed[1:rows] = 1000 * diff_data[1:rows, 3]/diff_data[1:rows, 0]
-    #Complete data matrix with new data.
-#    np.hstack([diff_data[4], diff_length])
-    diff_data = np.insert(diff_data, 4, diff_length, axis=1)
-    diff_data = np.insert(diff_data, 5, diff_speed, axis=1)
-    diff_data = np.insert(diff_data, 6, diff_angle_speed, axis=1)
-    clipped_data = np.hstack([clipped_data, diff_data])
-    #import pdb; pdb.set_trace()
-    #Average speed and average angle speed for masterfile txt.
-    rows, cols = clipped_data.shape
-    sum_data = diff_data.sum(axis=0)
-    length = math.sqrt(((clipped_data[rows-1,1] - clipped_data [0, 1])**2)+((clipped_data[rows-1,2] - clipped_data [0, 2])**2))
-    sum_data = diff_data.sum(axis=0)
-    avg_speed = np.round((1000*length/sum_data[0]), 2)
-    avg_ang_speed=np.round(((1000*(clipped_data[rows-1,3] - clipped_data [0, 3]))/sum_data[0]), 2)
-    #If you want to save to master file boolean True.
-    save_master = True
-    formatted_data = np.round(clipped_data, 2)
-    return formatted_data, save_master, avg_speed, avg_ang_speed
 
 def data2spreadsheet(header, data, filename, exp_conditions, save_master):
     """
@@ -497,7 +524,7 @@ def main():
     for y in range (0, o_index-1):
         #import pdb; pdb.set_trace()
         print names[y]
-        read_data(name_spreadsheet='datatemp/' + names[y], analyze=True)
+        data_matrix = read_data(name_spreadsheet='datatemp/' + names[y])
 
 
 if __name__ == '__main__':
