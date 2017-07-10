@@ -1,6 +1,5 @@
 #!/usr/bin/env python
-"""
-Auxiliary program for manipulate data of poses and time.
+"""Auxiliary program for manipulate data of poses and time.
 
 This module allows:
 -Read data of poses with their respective time, from a spreadsheet.
@@ -11,7 +10,6 @@ This module allows:
 """
 # Standard libraries
 import glob
-import math
 import numpy as np
 import os
 import re
@@ -21,176 +19,191 @@ import time
 # Excel read/write library
 import openpyxl
 
-
-class Analyze_data(object):
-    """
-    Receives poses and time of matrix to analyze.
-
-    Different time and position values are calculated between two data
-    points.
-    From these, the displaced length and the average speed of UGV are
-    calculated.
-
-    :param data: Matrix of floats64 with data.
-    """
-
-    def __init__(self, data=np.array([0, 0, 0, 0]).astype(np.float64)):
-
-        self.data = np.array([0, 0, 0, 0]).astype(np.float64)
-        self._diff_data = np.array([0, 0, 0, 0, 0, 0, 0, 0]).astype(np.float64)
-        self._avg_speed = 0
-        self._avg_ang_speed = 0
-
-    def erase_same_poses(self, data):
-        # New data is correct when at least one value of pose are different.
-        rows, cols = data.shape
-        # Initialization of arrays to format data.
-        last_data = np.array([0, 0, 0, 0]).astype(np.float64)
-        new_data = np.array([0, 0, 0, 0]).astype(np.float64)
-        for x in range (0, rows):
-            different_values = False
-            for y in range (0, cols):
-                new_data[y] = data[x,y]
-                if y > 0 :
-                    if new_data[y] != last_data [y]:
-                        different_values = True
-            if different_values:
-                last_data = np.copy(new_data)
-                if x == 0:
-                    # Initialization formatted_data array.
-                    formatted_data = np.copy(new_data)
-                else:
-                    formatted_data = np.vstack([formatted_data, new_data])
-        self.data = np.copy(formatted_data)
-        return formatted_data
-
-    def erase_stop_poses(self, data):
-        # Data erase with UGV stopped.
-        rows, cols = data.shape
-        # Initial repeated data calculation.
-        pos_x_upper = data[0:20, 1]
-        mode_pos_x_upper = stats.mode(pos_x_upper)
-        pos_y_upper = data[0:20, 2]
-        mode_pos_y_upper = stats.mode(pos_y_upper)
-        # Final repeated data calculation.
-        pos_x_lower = data[(rows-20):rows, 1]
-        mode_pos_x_lower = stats.mode(pos_x_lower)
-        pos_y_lower = data[(rows-20):rows, 2]
-        mode_pos_y_lower = stats.mode(pos_y_lower)
-        # Determination of rows UGV data in motion.
-#conditions = np.any(data!=moda, axis=1)
-#indexes = np.where(conditions)[0]
-#filtered_data = data[indexes[0]-1:indexes[1]+2, :]
-        row_upper = 0
-        row_lower = rows
-        for x in range(0, rows):
-            if (data[x,1] == mode_pos_x_upper[0] and
-                data[x,2] == mode_pos_y_upper[0]):
-                row_upper = x
-            if (data[x,1] == mode_pos_x_lower[0] and
-                data[x,2] == mode_pos_y_lower[0]):
-                row_lower = x + 1
-                break
-                # UGV data in motion.
-        clipped_data = data[row_upper:row_lower, :]
-        self.data = np.copy(clipped_data)
-        return clipped_data
-
-    def get_diff_data(self, data):
-        # Calculate differential values.
-        rows, cols = data.shape
-        work_data = np.copy(data)
-        #First sample, time zero.
-        work_data[:, 0] -= work_data[0, 0]
-        #Differential data matrix: current data minus previous data.
-        diff_data = np.zeros_like(work_data)
-        #Vector differential angle speed.
-        diff_angle_speed = np.zeros(rows)
-        diff_data[1:rows, :] = work_data[1:rows, :] - work_data[0:(rows-1), :]
-        #Vector differential length displaced.
-        diff_length = np.sqrt(diff_data[:,1] ** 2 + diff_data[:,2] ** 2)
-        speed_angles = np.arctan2(diff_data[:,2], diff_data[:,1])
-        # The direction is negative when the speed angle and vehicle angle
-        # difference is bigger than pi/2 (90 degrees).
-        sign_spd = np.ones([rows, 1])
-        sign_spd[np.abs(work_data[:,3]-speed_angles) > (np.pi/2)] *= -1
-        diff_speed = sign_spd[1:,0] * 1000 * diff_length[1:]/diff_data[1:,0]
-        diff_speed = np.hstack([0, diff_speed])
-#    for x in range(1, rows):
-#        cos_alpha[x] = diff_data[x,1] / diff_length[x]
-#        cos_thetha[x] = math.cos(data[x,3])
-#        sign_spd[x] = math.sign(cos_thetha[x]/cos_alpha[x])
-#        if diff_data[x,0] != 0:
-#            #Speed in millimeters/second.
-#            diff_speed[x] = ((sign_spd[x] * diff_length[x]) / diff_data[x,0]) * 1000
-        diff_angle_speed[1:rows] = 1000 * diff_data[1:rows, 3]/diff_data[1:rows, 0]
-        #Complete data matrix with new data.
-#    np.hstack([diff_data[4], diff_length])
-        diff_data = np.insert(diff_data, 4, diff_length, axis=1)
-        diff_data = np.insert(diff_data, 5, diff_speed, axis=1)
-        diff_data = np.insert(diff_data, 6, diff_angle_speed, axis=1)
-        work_data = np.hstack([work_data, diff_data])
-        #Average speed and average angle speed for masterfile txt.
-        rows, cols = work_data.shape
-        sum_data = diff_data.sum(axis=0)
-        length = math.sqrt(((work_data[rows-1,1] - work_data [0, 1])**2)+((work_data[rows-1,2] - work_data [0, 2])**2))
-        sum_data = diff_data.sum(axis=0)
-        avg_speed = np.round((1000*length/sum_data[0]), 2)
-        avg_ang_speed = np.round(((1000*(work_data[rows-1,3] - work_data [0, 3]))/sum_data[0]), 2)
-        #If you want to save to master file boolean True.
-        formatted_data = np.round(work_data, 2)
-        self._diff_data = np.copy(formatted_data)
-        self._avg_speed = avg_speed
-        self._avg_ang_speed = avg_ang_speed
-        return formatted_data, avg_speed, avg_ang_speed
-
-def format_spreadsheet(cell):
-    """
-    It allows different types of format in spreadsheet cells.
-
-    :param cell: type of format desired.
-    """
+"""Dictionary with different formats to apply to the cells when writes
+the data in a spreadsheet.
+"""
+cell_formats = {
     # Types of text alignment.
-    if cell == 'center_al':
-        format_cell = openpyxl.styles.Alignment(horizontal='center',
-                                                vertical='center')
-    elif cell == 'right_al':
-        format_cell = openpyxl.styles.Alignment(horizontal='right',
-                                                vertical='center')
+    'center_al': openpyxl.styles.Alignment(horizontal='center',
+                                           vertical='center'),
+    'right_al': openpyxl.styles.Alignment(horizontal='right',
+                                          vertical='center'),
     # Types of font.
-    elif cell == 'title_ft':
-        format_cell = openpyxl.styles.Font(color='FFFFFFFF', size=20, bold=True)
-    elif cell == 'white_ft':
+    'title_ft': openpyxl.styles.Font(color='FFFFFFFF', size=20, bold=True),
+    'white_ft': openpyxl.styles.Font(color='FFFFFFFF', bold=True),
     # Types of border.
-        format_cell = openpyxl.styles.Font(color='FFFFFFFF', bold=True)
-    elif cell == 'thick_bd':
-        format_cell = openpyxl.styles.Border(
+    'thick_bd': openpyxl.styles.Border(
                                 top=openpyxl.styles.Side(border_style='thick',
                                                          color='FF4143CA'),
                                 bottom=openpyxl.styles.Side(
-                                        border_style='thick', color='FF4143CA'))
-    elif cell == 'thin_bd':
-        format_cell = openpyxl.styles.Border(
-                                top=openpyxl.styles.Side(border_style='thin',
-                                                         color='FF83C6D6'),
+                                       border_style='thick', color='FF4143CA')),
+    'thin_bd': openpyxl.styles.Border(
+                                   top=openpyxl.styles.Side(border_style='thin',
+                                                            color='FF83C6D6'),
                                 bottom=openpyxl.styles.Side(border_style='thin',
-                                                            color='FF83C6D6'))
+                                                            color='FF83C6D6')),
     # Types of fill.
-    elif cell == 'blue_fill':
-        format_cell = openpyxl.styles.PatternFill(fill_type='solid',
-                                                  start_color='FF2F79E6',
-                                                  end_color='FF2F79E6')
-    elif cell == 'skyblue_fill':
-        format_cell = openpyxl.styles.PatternFill(fill_type='solid',
-                                                  start_color='FFDBF4FA',
-                                                  end_color='FFDBF4FA')
-    elif cell == 'white_fill':
-        format_cell = openpyxl.styles.PatternFill(fill_type='solid',
-                                                  start_color='FFFFFFFF',
-                                                  end_color='FFFFFFFF')
-    return format_cell
+    'blue_fill': openpyxl.styles.PatternFill(fill_type='solid',
+                                             start_color='FF2F79E6',
+                                             end_color='FF2F79E6'),
+    'skyblue_fill': openpyxl.styles.PatternFill(fill_type='solid',
+                                                start_color='FFDBF4FA',
+                                                end_color='FFDBF4FA')
+    'white_fill': openpyxl.styles.PatternFill(fill_type='solid',
+                                              start_color='FFFFFFFF',
+                                              end_color='FFFFFFFF')
+}
 
-def read_data(name_spreadsheet="31_05_2017_201-L255-R255.xlsx"):
+class DataAnalyzer(object):
+    """Receives time and poses of matrix to filter and analyze.
+
+    Different time and position values are calculated between two data
+    points. From these, the linear average speed and the angular average
+    speed are calculated.
+
+    :param data: Matrix of floats64 with M data.
+    :type data: numpy.array float64 (shape=Mx4).
+    :param analyzed_data: Matrix with M analyzed data after calculating.
+     differential values and relative linear and angular speeds.
+    :type analyzed_data: numpy.array float64 (shape=Mx11).
+    :param float64 avg_speed: average linear speed of UGV.
+    :param float64 avg_ang_speed: average angular speed of UGV.
+    """
+    def __init__(self, data=np.array([0, 0, 0, 0]).astype(np.float64)):
+        self._data = data
+        self._analyzed_data = np.zeros((1, 11))
+        self._avg_speed = 0
+        self._avg_ang_speed = 0
+
+    def upload_data(self, data):
+        """Update data matrix with time and poses.
+
+        :param data: Matrix of floats64 with M data.
+        :type data: numpy.array float64 (shape=Mx4).
+        :return: updated data.
+        :rtype: numpy.array float64 (shape=Mx4).
+        """
+        self._data = data
+        return self._data
+
+    def remove_repeated_poses(self):
+        """Remove repeated pose values.
+
+        When the camera does not detect a triangle, the pose value is
+        not updated, remaining the current pose as the previous pose.
+        With this method, these values are eliminated.
+
+        :return: data without repeated values.
+        :rtype: numpy.array float64 (shape=Mx4).
+        """
+        # New data is correct when at least one value of pose are different.
+        rows = self._data.shape[0]
+        # Initialization data arrays.
+        last_data = np.array([0, 0, 0, 0]).astype(np.float64)
+        filtered_data = np.array([0, 0, 0, 0]).astype(np.float64)
+        for row in range(rows):
+            # New dara read array.
+            new_data = np.copy(self._data[row, :])
+            different_values = np.any(new_data[1:4] != last_data[1:4])
+            if different_values:
+                last_data = np.copy(new_data)
+                if row == 0:
+                    # Initialization filtered_data array.
+                    filtered_data = np.copy(new_data)
+                else:
+                    filtered_data = np.vstack([filtered_data, new_data])
+        self._data = np.copy(filtered_data)
+        return filtered_data
+
+    def remove_stop_poses(self):
+        """Remove stop pose values.
+
+        This method eliminates the initial and final values in which the
+        UGV is stopped.
+
+        :return: data without stop values.
+        :rtype: numpy.array float64 (shape=Mx4).
+        """
+        rows = self._data.shape[0]
+        # Initialization first and last rows witout poses with stopped UGV.
+        row_upper = 0
+        row_lower = rows
+        # Initial repeated data calculation.
+        mode_upper = stats.mode(self._data[0:20, 1:3])[0]
+        mode_rows = np.all(self._data[:, 1:3]==mode_upper, axis=1)
+        indexes = np.where(mode_rows)[0]
+        # If there are no initial values ​​of stopped UGV is not updated.
+        if indexes.shape[0] > 0:
+            row_upper = indexes.max()
+        # Final repeated data calculation.
+        mode_lower = stats.mode(self._data[(rows-20):rows, 1:3])[0]
+        mode_rows = np.all(self._data[:, 1:3]==mode_lower, axis=1)
+        indexes = np.where(mode_rows)[0]
+        # If there are no final values ​​of stopped UGV is not updated.
+        if indexes.shape[0] > 0:
+            row_lower = indexes.min() + 1
+        # UGV data in motion.
+        clipped_data = self._data[row_upper:row_lower, :]
+        self._data = np.copy(clipped_data)
+        return clipped_data
+
+    def get_diff_data(self):
+        """Get differential data and relative linear and angular speed.
+
+        Difference data are obtained between two consecutive samples,
+        and linear and angular speeds are calculated from them.
+
+        It also obtain the absolute linear and angular velocity of the
+        experiment.
+
+        :returns: [formatted_data, avg_speed, avg_ang_speed]
+          * *formatted_data* data with differential values ​​and angular
+            and linear speeds.
+          * *avg_speed* average linear speed of UGV.
+          * *avg_ang_speed* average angular speed of UGV.
+        :rtype: [numpy.array float64 (shape=Mx11), float64, float64]
+        """
+        # Calculate differential values.
+        work_data = np.copy(self._data)
+        rows = self._data.shape[0]
+        # First sample, time zero.
+        work_data[:, 0] -= work_data[0, 0]
+        # Differential data matrix: current data minus previous data.
+        # diff_data = np.zeros_like(self._data)
+        diff_data = work_data[1:rows, :] - work_data[0:(rows-1), :]
+        # Vector differential length displaced.
+        diff_length = np.sqrt(diff_data[:, 1]**2 + diff_data[:, 2]**2)
+        # The direction is negative when the angular speed and vehicle angle
+        # difference is bigger than pi/2 (90 degrees).
+        speed_angles = np.arctan2(diff_data[:, 2], diff_data[:, 1])
+        sign_spd = np.ones([rows, 1])
+        sign_spd[np.abs(work_data[:, 3] - speed_angles) > (np.pi/2)] *= -1
+        diff_speed = sign_spd[1:, 0] * 1000 * diff_length[1:]/diff_data[1:, 0]
+        diff_speed = np.hstack([0, diff_speed])
+        # Vector differential angular speed.
+        diff_angl_speed = 1000 * diff_data[1:rows, 3] / diff_data[1:rows, 0]
+        # Complete differential data matrix with new data.
+        diff_data = np.hstack([np.zeros(rows, 1), diff_data])
+        diff_data = np.insert(diff_data, 4, diff_length, axis=1)
+        diff_data = np.insert(diff_data, 5, diff_speed, axis=1)
+        diff_data = np.insert(diff_data, 6, diff_angl_speed, axis=1)
+        # Complete data matrix with differential_data.
+        work_data = np.hstack([work_data, diff_data])
+        # Average speed and average angular speed.
+        sum_data = diff_data.sum(axis=0)
+        length = np.sqrt(((work_data[rows-1,1] - work_data [0, 1])**2)
+                           + ((work_data[rows-1,2] - work_data [0, 2])**2))
+        sum_data = diff_data.sum(axis=0)
+        avg_speed = np.round((1000*length/sum_data[0]), 2)
+        avg_ang_speed = np.round(((1000*(work_data[rows-1, 3]
+                                   - work_data [0, 3]))/sum_data[0]), 2)
+        formatted_data = np.round(work_data, 2)
+        self._analyzed_data = np.copy(formatted_data)
+        self._avg_speed = avg_speed
+        self._avg_ang_speed = avg_ang_speed
+        return (formatted_data, avg_speed, avg_ang_speed)
+
+def read_data(name_spreadsheet="31_05_2017_201-L255-R255c.xlsx"):
     """It allows to read poses and time of spreadsheet.
 
     These data are stored in the "data" matrix.
@@ -201,7 +214,7 @@ def read_data(name_spreadsheet="31_05_2017_201-L255-R255.xlsx"):
 
     :param str name_spreadsheet: name of spreadsheet that contain the
     data to be read.
-    :returns: matrix dimentions Mx4 with read data. M is the number of
+    :return: matrix dimentions Mx4 with read data. M is the number of
     rows corresponding to the number of data read.
     :rtype: numpy.array(shape=Mx4)
     """
@@ -230,9 +243,9 @@ def read_data(name_spreadsheet="31_05_2017_201-L255-R255.xlsx"):
             data_in_this_row = False
         else:
             # Reading data.
-            for y in range (0, cols):
-                element = ws.cell(column=y+1, row=row).value
-                new_data[y] = element
+            for col in range (0, cols):
+                element = ws.cell(column=col+1, row=row).value
+                new_data[col] = element
             if row == 7:
                 # Substitution of row of zeros by first row of data read.
                 data = np.copy(new_data)
@@ -242,53 +255,26 @@ def read_data(name_spreadsheet="31_05_2017_201-L255-R255.xlsx"):
     rounded_data = np.round(data, 2)
     return rounded_data
 
-def save_data(data, analyze=False):
+def save2data(data, filename=None, save):
     """
-    Receives poses and time of matrix to analyze and/or save them.
+    Receives poses and time of matrix to save them.
 
     :param data: Matrix of floats64 with data.
-    :param analyze: Boolean that allows analyze or not the data.
     """
     #Get the SP values from the user.
     time.sleep(0.2)
-    #Delete first row data (row of zeros).
-    data = data[1:data.shape[0], :]
-
-
-    data_2 = np.array([0, 0, 0, 0]).astype(np.float64)
-    last_data_2 = np.array([0, 0, 0, 0]).astype(np.float64)
-    new_data_2 = np.array([0, 0, 0, 0]).astype(np.float64)
-    #Number of columns in the matrix.
-    rows, cols = data.shape
-    #Loop for reading data.
-    #TODO unnecesary
-    current_row_data = True
-    for x in range (0, rows):
-        same_previous_data = False
-        for y in range (0, cols):
-            new_data_2[y] = data[x,y]
-            if y > 0 :
-                if new_data_2[y] != last_data_2 [y]:
-                    same_previous_data = True
-        if same_previous_data == True:
-            last_data_2 = np.copy(new_data_2)
-            data_2 = np.vstack([data_2, new_data_2])
-    data = data_2
-
-    data = data[1:data.shape[0], :]
-
+    data_to_save = data
     #First sample, time zero.
-    data[0:data.shape[0], 0] = data[0:data.shape[0], 0] - data[0, 0]
+    rows = data_to_save.shape[0]
+    data_to_save[0:rows, 0] = data_to_save[0:rows, 0] - data_to_save[0, 0]
     #numbers_filename = re.findall(r'\d+', name_spreadsheet)
     #sp_left = int(numbers_filename[4])
     #sp_right = int(numbers_filename[5])
-    # #TODO Try, except correct value.
+    #TODO Try, except correct value.
     sp_left = input("Introduce value of sp_left between 0 and 255\n")
     sp_right = input("Introduce value of sp_right between 0 and 255\n")
     #Header construction and data analysis if the latter is required.
     if analyze:
-        #Call for data analysis function.
-        data, save_master, avg_speed, avg_ang_speed = analyze_data(data)
         header_text = np.array(['Time', 'Pos x', 'Pos y', 'Angle', 'Diff Time',
                             'Diff Posx', 'Diff Posy', 'Diff Angl', 'Diff Leng',
                             'Rel Speed', 'Rel AnSpd'])
@@ -353,9 +339,9 @@ def data2spreadsheet(header, data, filename, exp_conditions, save_master):
     #Spreadsheet title.
     ws.merge_cells('A1:K2')
     ws.cell('A1').value = filename
-    ws.cell('A1').alignment = format_spreadsheet('center_al')
-    ws.cell('A1').font = format_spreadsheet('title_ft')
-    ws.cell('A1').fill = format_spreadsheet('blue_fill')
+    ws.cell('A1').alignment = cell_formats('center_al')
+    ws.cell('A1').font = cell_formats('title_ft')
+    ws.cell('A1').fill = cell_formats('blue_fill')
     #Experiment conditions.
     ws.merge_cells('A3:K5')
     ws.cell('A3').value = exp_conditions
@@ -367,29 +353,30 @@ def data2spreadsheet(header, data, filename, exp_conditions, save_master):
     cols = data.shape[1]
     for y in range (0, cols):
         ws.cell(column=y+1, row=6, value=header[y])
-        ws.cell(column=y+1, row=6).alignment = format_spreadsheet('right_al')
-        ws.cell(column=y+1, row=6).font = format_spreadsheet('white_ft')
-        ws.cell(column=y+1, row=6).fill = format_spreadsheet('blue_fill')
-        ws.cell(column=y+1, row=6).border = format_spreadsheet('thick_bd')
+        ws.cell(column=y+1, row=6).alignment = cell_formats('right_al')
+        ws.cell(column=y+1, row=6).alignment = cell_formats('right_al')
+        ws.cell(column=y+1, row=6).font = cell_formats('white_ft')
+        ws.cell(column=y+1, row=6).fill = cell_formats('blue_fill')
+        ws.cell(column=y+1, row=6).border = cell_formats('thick_bd')
     #Write in spreadsheet the data.
     for x in range(1, rows):
         for y in range(0, cols):
             element = float(data[x,y])
             ws.cell(column=y+1, row=x+6, value=element).number_format = '0.00'
             if x % 2 != 0:
-                ws.cell(column=y+1, row=x+6).fill = format_spreadsheet(
+                ws.cell(column=y+1, row=x+6).fill = cell_formats(
                                                                  'skyblue_fill')
             else:
-                ws.cell(column=y+1, row=x+6).fill = format_spreadsheet(
+                ws.cell(column=y+1, row=x+6).fill = cell_formats(
                                                                    'white_fill')
             my_cell = ws.cell(column=y+1, row=x+6)
             ws.column_dimensions[my_cell.column].width = 10
     #Write in spreadsheet the name of statistics.
     for x in range(rows+6, rows+12):
         ws.merge_cells(start_row=x,start_column=1,end_row=x,end_column=4)
-        ws.cell(column=1, row=x).alignment = format_spreadsheet('right_al')
-        ws.cell(column=1, row=x).fill = format_spreadsheet('blue_fill')
-        ws.cell(column=1, row=x).font = format_spreadsheet('white_ft')
+        ws.cell(column=1, row=x).alignment = cell_formats('right_al')
+        ws.cell(column=1, row=x).fill = cell_formats('blue_fill')
+        ws.cell(column=1, row=x).font = cell_formats('white_ft')
     ws.cell(column=1, row=rows+6, value='Sum differential data:')
     ws.cell(column=1, row=rows+7, value='Mean of differential data:')
     ws.cell(column=1, row=rows+8, value='Variance differential data:')
@@ -410,9 +397,9 @@ def data2spreadsheet(header, data, filename, exp_conditions, save_master):
         ws.cell(column=y, row=rows+9, value= '=STDEV({})\n'.format(interval))
         for x in range(rows+6, rows+12):
             ws.cell(column=y, row=x).number_format = '0.00'
-            ws.cell(column=y, row=x).font = format_spreadsheet('white_ft')
-            ws.cell(column=y, row=x).fill = format_spreadsheet('blue_fill')
-            ws.cell(column=y, row=x).alignment = format_spreadsheet('right_al')
+            ws.cell(column=y, row=x).font = cell_formats('white_ft')
+            ws.cell(column=y, row=x).fill = cell_formats('blue_fill')
+            ws.cell(column=y, row=x).alignment = cell_formats('right_al')
     ws.cell(column=11, row=rows+10, value= '=1000*SQRT(((B{rows}-B7)^2)+'
             '(((C{rows}-C7)^2)))/E{rows2}\n'.format(rows=rows+5, rows2=rows+6))
     ws.cell(column=11, row=rows+11, value= '=1000*(D{rows}-D7)/'
@@ -484,11 +471,11 @@ def save2master_xlsx(data_master):
         else:
             ws.column_dimensions[my_cell.column].width = 10
         if row % 2 != 0:
-            ws.cell(column=y, row=row).fill = format_spreadsheet('skyblue_fill')
+            ws.cell(column=y, row=row).fill = cell_formats('skyblue_fill')
         else:
-            ws.cell(column=y, row=row).fill = format_spreadsheet('white_fill')
+            ws.cell(column=y, row=row).fill = cell_formats('white_fill')
         if y < 6:
-            ws.cell(column=y, row=row).alignment = format_spreadsheet('right_al')
+            ws.cell(column=y, row=row).alignment = cell_formats('right_al')
     wb.save("datatemp/masterfile4.xlsx")
 
 def save2master_txt(data_master):

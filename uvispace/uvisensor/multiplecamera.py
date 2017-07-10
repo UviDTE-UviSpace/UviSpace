@@ -350,6 +350,11 @@ class DataFusionThread(threading.Thread):
                 self.data_hist = np.vstack((self.data_hist, new_data))
                 rospy.logdebug("detected triangle at {}mm and {} radians."
                                "".format(pose[0:2], pose[2]))
+               ## Predict actual position (kalman)
+               # get input with zmq
+               # self.kalman.predict(input, delta_t)
+               ## Update position (kalman)
+               # self.kalman.update(mpose)
                 self.publisher.publish(Pose2D(mpose[0], mpose[1], mpose[2]))
             rospy.loginfo("Triangles at: {}".format(self._triangles))
             #            rospy.loginfo("Borders: {}".format(self._inborders))
@@ -361,6 +366,9 @@ class DataFusionThread(threading.Thread):
             # Save historic data containing poses and times.
             saveposes.save_data(self.data_hist, analyze=True)
 
+    #### #Delete first row data (row of zeros).
+    # if work_data[0, 4]==np.array([0, 0, 0, 0]).astype(np.float64):
+    #     work_data = work_data[1:data.shape[0], :]
 
 class UserThread(threading.Thread):
     """
