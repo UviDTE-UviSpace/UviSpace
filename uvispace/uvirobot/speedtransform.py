@@ -68,7 +68,7 @@ class PolySpeedSolver(object):
         :param float linear: linear speed value.
         :param float angular: angular speed value.
         :return: physical vehicle setpoint.
-        :rtype: 0 to 255 int
+        :rtype: 0 to 255 int.
         """
         # Solve the poly function as a outer product between the coeficients and
         # the independent variables.
@@ -88,6 +88,8 @@ class PolySpeedSolver(object):
 
         :param coefs: coefficients of the second degree polynomial.
         :type coefs: tuple(6 elements float).
+        :return: updated coefficients of a polynomial.
+        :rtype: tuple(6 elemens float)        
         """
         self._coefs = coefs
         return self._coefs
