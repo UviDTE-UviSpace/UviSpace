@@ -74,7 +74,7 @@ def main():
         'x': pose_x,
         'y': pose_y,
         'theta': pose_theta,
-        'step': step
+        'step': step,
     }
     # The loop is exited after the sigint_handler function is called.
     while run_program:
