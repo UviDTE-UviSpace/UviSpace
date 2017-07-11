@@ -4,7 +4,7 @@
 The module instantiates a RobotController object and uses its methods
 for publishing new speed set points.
 
-When calling the module, one argument must be passed, representing the 
+When calling the module, one argument must be passed, representing the
 id of the desired robot. It must be the same as the one passed to the
 messenger.py module.
 """
@@ -53,22 +53,21 @@ def init_sockets(robot_id):
     logger.debug("Initializing subscriber sockets")
 
     # Open a subscribe socket to listen for position data
-    pos_sock = zmq.Context.instance().socket(zmq.SUB)
-    pos_sock.setsockopt_string(zmq.SUBSCRIBE, u"")
-    pos_sock.setsockopt(zmq.CONFLATE, True)
-    pos_sock.connect("tcp://localhost:{}".format(
+    pose_subscriber = zmq.Context.instance().socket(zmq.SUB)
+    pose_subscriber.setsockopt_string(zmq.SUBSCRIBE, u"")
+    pose_subscriber.setsockopt(zmq.CONFLATE, True)
+    pose_subscriber.connect("tcp://localhost:{}".format(
             int(os.environ.get("UVISPACE_BASE_PORT_POSITION"))+robot_id))
 
     # Open a subscribe socket to listen for new goals
-    goa_sock = zmq.Context.instance().socket(zmq.SUB)
-    goa_sock.setsockopt_string(zmq.SUBSCRIBE, u"")
-    pos_sock.setsockopt(zmq.CONFLATE, True)
-    goa_sock.connect("tcp://localhost:{}".format(
+    goal_subscriber = zmq.Context.instance().socket(zmq.SUB)
+    goal_subscriber.setsockopt_string(zmq.SUBSCRIBE, u"")
+    goal_subscriber.connect("tcp://localhost:{}".format(
             int(os.environ.get("UVISPACE_BASE_PORT_GOAL"))+robot_id))
     # Construct the sockets dictionary
     sockets = {
-        'position': pos_sock,
-        'goal': goa_sock
+        'pose_subscriber': pose_subscriber,
+        'goal_subscriber': goal_subscriber,
     }
     return sockets
 
@@ -78,22 +77,22 @@ def listen_sockets(sockets, my_robot):
     global run_program
     # Initialize poll set
     poller = zmq.Poller()
-    poller.register(sockets['position'], zmq.POLLIN)
-    poller.register(sockets['goal'], zmq.POLLIN)
+    poller.register(sockets['pose_subscriber'], zmq.POLLIN)
+    poller.register(sockets['goal_subscriber'], zmq.POLLIN)
 
     # listen for position information and new goal points
     while run_program:
         # poll the sockets every second
         events = dict(poller.poll(1000))
-        if (sockets['position'] in events
-                and events[sockets['position']] == zmq.POLLIN):
-            position = sockets['position'].recv_json()
-            logger.debug("Received new position: {}".format(position))
+        if (sockets['pose_subscriber'] in events
+                and events[sockets['pose_subscriber']] == zmq.POLLIN):
+            position = sockets['pose_subscriber'].recv_json()
+            logger.debug("Received new pose: {}".format(position))
             my_robot.set_speed(position)
 
-        if (sockets['goal'] in events
-                and events[sockets['goal']] == zmq.POLLIN):
-            goal = sockets['goal'].recv_json()
+        if (sockets['goal_subscriber'] in events
+                and events[sockets['goal_subscriber']] == zmq.POLLIN):
+            goal = sockets['goal_subscriber'].recv_json()
             logger.debug("Received new goal: {}".format(goal))
             my_robot.new_goal(goal)
 
@@ -145,10 +144,10 @@ def main():
     # initialized. Keep trying to receive the initial position with a
     # no blocking recv until the instance is initialized or the run flag
     # has been set to False.
-    logger.info("Waiting for first position")
+    logger.info("Waiting for first pose")
     while run_program and not my_robot.init:
         try:
-            position = sockets['position'].recv_json(zmq.NOBLOCK)
+            position = sockets['pose_subscriber'].recv_json(zmq.NOBLOCK)
         except zmq.ZMQError:
             pass
         else:
@@ -163,7 +162,10 @@ def main():
     listen_sockets(sockets, my_robot)
     # Once the run flag has been set to False, shutdown
     my_robot.on_shutdown()
-
+    # Cleanup resources
+    for socket in sockets:
+        sockets[socket].close()
+    # Plot results
     if my_robot.QCTracker.path is not None:
         # Print the log output to files and plot it
         script_path = os.path.dirname(os.path.realpath(__file__))

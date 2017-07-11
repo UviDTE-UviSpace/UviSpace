@@ -1,21 +1,30 @@
 #!/usr/bin/env python
-"""Auxiliary program for controlling the UGV movements through keyboard."""
+"""Auxiliary program for controlling the UGV movements through keyboard"""
 # Standard libraries
+import ast
+import ConfigParser
+import getopt
+import glob
+import logging
 import os
+import select
+import signal
+import sys
 import termios
 import tty
-import select
-import sys
 # Third party libraries
 import zmq
-
+# Local libraries
 try:
-    # Logging setup.
-    import settings
+    from uvirobot.speedtransform import Speed
 except ImportError:
-    # Exit program if the settings module can't be found.
-    sys.exit("Can't find settings module. Maybe environment variables are not"
+    # Exit program if the uvirobot package can't be found.
+    sys.exit("Can't find uvirobot module. Maybe environment variables are not"
              "set. Run the environment .sh script at the project root folder.")
+
+# Logging setup.
+import settings
+
 
 def get_key():
     """Return key pressed."""
@@ -39,14 +48,56 @@ def get_key():
 
 
 def main():
+    # SIGINT handling:
+    # -Create a global flag to check if the execution should keep running.
+    # -Whenever SIGINT is received, set the global flag to False.
+    global run_program
+    run_program = True
+
+    def sigint_handler(signal, frame):
+        global run_program
+        run_program = False
+        return
+    signal.signal(signal.SIGINT, sigint_handler)
+    # This exception forces to give the robot_id argument within run command.
+    help_msg = ('Usage: teleoperation.py [-r <robot_id>],'
+                '[--robotid=<robot_id>]')
+    try:
+        opts, args = getopt.getopt(sys.argv[1:], "hr:", ["robotid="])
+    except getopt.GetoptError:
+        print help_msg
+        sys.exit()
+    if not opts:
+        print help_msg
+        sys.exit()
+    for opt, arg in opts:
+        if opt == '-h':
+            print help_msg
+            sys.exit()
+        if opt in ("-r", "--robotid"):
+            robot_id = int(arg)
     # Init publisher
-    publisher = zmq.Context.instance().socket(zmq.PUB)
-    publisher.bind("tcp://*:{}".format(
+    speed_publisher = zmq.Context.instance().socket(zmq.PUB)
+    speed_publisher.bind("tcp://*:{}".format(
             int(os.environ.get("UVISPACE_BASE_PORT_SPEED"))+1))
-    speeds = {
+    speed_message = {
+        'step': 0,
         'linear': 0.0,
-        'angular': 0.0
+        'angular': 0.0,
+        'sp_left': 127,
+        'sp_right': 127,
     }
+    speed = Speed()
+    # Read configuration file coefficients.
+    conf = ConfigParser.ConfigParser()
+    conf_file = glob.glob("./config/robot{}.cfg".format(robot_id))
+    conf.read(conf_file)
+    coefs_left = ast.literal_eval(conf.get('Coefficients', 'coefs_left'))
+    coefs_right = ast.literal_eval(conf.get('Coefficients', 'coefs_right'))
+    # Send the coeficients to the polynomial solver objects.
+    speed.poly_solver_left.update_coefs(coefs_left)
+    speed.poly_solver_right.update_coefs(coefs_right)
+    # import pdb; pdb.set_trace()
     # instructions for moving the UGV.
     print ('\n\r'
            'Teleoperation program initialized. Available commands:\n\r'
@@ -68,45 +119,49 @@ def main():
         key = get_key()
         # Move forward.
         if key in ('w', 'W'):
-            message = 'moving forward'
-            speeds['linear'] = 190
-            speeds['angular'] = 0
-            publisher.send_json(speeds)
+            screen_message = 'moving forward'
+            speed_message['sp_left'] = speed.poly_solver_left.solve(400, 0)
+            speed_message['sp_right'] = speed.poly_solver_right.solve(400, 0)
+            speed_publisher.send_json(speed_message)
         # Move backwards.
         elif key in ('s', 'S'):
-            message = 'moving backwards'
-            speeds['linear'] = -300
-            speeds['angular'] = 0
-            publisher.send_json(speeds)
+            screen_message = 'moving backwards'
+            speed_message['sp_left'] = speed.poly_solver_left.solve(-200, 0)
+            speed_message['sp_right'] = speed.poly_solver_right.solve(-200, 0)
+            speed_publisher.send_json(speed_message)
         # Move left.
         elif key in ('a', 'A'):
-            message = 'moving left'
-            speeds['linear'] = 0
-            speeds['angular'] = 10
-            publisher.send_json(speeds)
+            screen_message = 'moving left'
+            speed_message['sp_left'] = speed.poly_solver_left.solve(200, 1)
+            speed_message['sp_right'] = speed.poly_solver_right.solve(200, 1)
+            speed_publisher.send_json(speed_message)
         # Move right.
         elif key in ('d', 'D'):
-            message = 'moving right'
-            speeds['linear'] = 0
-            speeds['angular'] = -10
-            publisher.send_json(speeds)
+            screen_message = 'moving right'
+            speed_message['sp_left'] = speed.poly_solver_left.solve(200, -1)
+            speed_message['sp_right'] = speed.poly_solver_right.solve(200, -1)
+            speed_publisher.send_json(speed_message)
         # Stop moving and exit.
         elif key in ('q', 'Q'):
             print ('Stop and exiting program. Have a good day! =)')
-            speeds['linear'] = 0
-            speeds['angular'] = 0
-            publisher.send_json(speeds)
+            speed_message['sp_left'] = speed.poly_solver_left.solve(0, 0)
+            speed_message['sp_right'] = speed.poly_solver_right.solve(0, 0)
+            speed_publisher.send_json(speed_message)
             break
         # Stop moving.
         else:
-            message = 'stop moving'
-            speeds['linear'] = 0
-            speeds['angular'] = 0
-            publisher.send_json(speeds)
+            screen_message = 'stop moving'
+            speed_message['sp_left'] = speed.poly_solver_left.solve(0, 0)
+            speed_message['sp_right'] = speed.poly_solver_right.solve(0, 0)
+            speed_publisher.send_json(speed_message)
         # if key pressed now and key pressed previously are different,
         # update message
         if prev_key != key:
-            print('Currently %s. \n\r' % message)
+            print('Currently %s. \n\r' % screen_message)
+
+    # Cleanup resources before end
+    speed_publisher.close()
+    return
 
 
 if __name__ == '__main__':
