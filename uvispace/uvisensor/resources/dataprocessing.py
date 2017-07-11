@@ -19,7 +19,7 @@ import time
 # Excel read/write library
 import openpyxl
 # Local libraries
-import workbookfunctions
+import workbookfunctions as wf
 
 class DataAnalyzer(object):
     """Receives time and poses of matrix to filter, analyze and save.
@@ -39,17 +39,17 @@ class DataAnalyzer(object):
     def __init__(self):
 
         self.process_data = {
-            'raw_data' : np.zeros((1,4))
-            'analyzed_data' : np.zeros((1,11))
-            'avg_speed' : 0
-            'avg_ang_speed' : 0
-            'filename' : None
-            'sp_left' : 0
-            'sp_right' 0
-            'exp_conditions' : ""
-            'data_to_save' : 0
-            'header' : ""
-            'save_analyzed' : False
+            'raw_data' : np.zeros((1,4)),
+            'analyzed_data' : np.zeros((1,11)),
+            'avg_speed' : 0,
+            'avg_ang_speed' : 0,
+            'filename' : None,
+            'sp_left' : 0,
+            'sp_right' : 0,
+            'exp_conditions' : "",
+            'data_to_save' : 0,
+            'header' : "",
+            'save_analyzed' : False,
         }
 
     def upload_data(self, data):
@@ -70,7 +70,7 @@ class DataAnalyzer(object):
 
         return sp_left, sp_right
 
-    def upload_filename_save(self, filename):
+    def upload_filename(self, filename):
 
         self.process_data['filename'] = filename
 
@@ -156,15 +156,13 @@ class DataAnalyzer(object):
         :rtype: [numpy.array float64 (shape=Mx11), float64, float64]
         """
         # Calculate differential values.
-        work_data = np.copy(self._raw_data)
-        rows = self._raw_data.shape[0]
+        work_data = np.copy(self.process_data['raw_data'])
+        rows = work_data.shape[0]
         # First sample, time zero.
         work_data[:, 0] -= work_data[0, 0]
         # Differential data matrix: current data minus previous data.
         diff_data = np.zeros_like(work_data)
         diff_data[1:rows, :] = work_data[1:rows, :] - work_data[0:(rows-1), :]
-        # first_row = np.zeros((1,4))
-        # diff_data = np.vstack([first_row, diff_data])
         # Vector differential length displaced.
         diff_length = np.sqrt(diff_data[:, 1]**2 + diff_data[:, 2]**2)
         # The direction is negative when the angular speed and vehicle angle
@@ -177,7 +175,8 @@ class DataAnalyzer(object):
         diff_speed = np.hstack([0, diff_speed])
         # Vector differential angular speed.
         diff_angl_speed = np.zeros(rows)
-        diff_angl_speed[1:rows] = 1000 * diff_data[1:rows, 3] / diff_data[1:rows, 0]
+        diff_angl_speed[1:rows] = (1000 * diff_data[1:rows, 3]
+                                   / diff_data[1:rows, 0])
         # Complete differential data matrix with new data.
         # diff_data = np.hstack([np.zeros(rows, 1), diff_data])
         diff_data = np.insert(diff_data, 4, diff_length, axis=1)
@@ -200,50 +199,56 @@ class DataAnalyzer(object):
         return (formatted_data, avg_speed, avg_ang_speed)
 
     def save2data(self, save_analyzed=False):
-        self._save_analyzed = save_analyzed
-        if self._save_analyzed:
-            work_data = np.copy(self._analyzed_data)
+        self.process_data['save_analyzed'] = save_analyzed
+        if self.process_data['save_analyzed']:
+            work_data = np.copy(self.process_data['analyzed_data'])
             # Header construction.
-            self._header = np.array(['Time', 'Pos x', 'Pos y', 'Angle',
-                                    'Diff Time', 'Diff Posx', 'Diff Posy',
-                                    'Diff Angl', 'Diff Leng', 'Rel Speed',
-                                    'Rel AnSpd'])
+            self.process_data['header'] = np.array(['Time', 'Pos x', 'Pos y',
+                                                    'Angle', 'Diff Time',
+                                                    'Diff Posx', 'Diff Posy',
+                                                    'Diff Angl', 'Diff Leng',
+                                                    'Rel Speed', 'Rel AnSpd'])
         else:
-            work_data = np.copy(work_data)
+            work_data = np.copy(self.process_data['raw_data'])
             # Header construction.
-            self._header = np.array(['Time', 'Pos x', 'Pos y', 'Angle'])
+            self.process_data['header'] = np.array(['Time', 'Pos x', 'Pos y',
+                                                    'Angle'])
         #First sample, time zero.
         rows, cols = work_data.shape
         work_data[:, 0] = work_data[:, 0] - work_data[0, 0]
-        self._data_to_save = np.copy(work_data)
+        self.process_data['data_to_save'] = np.copy(work_data)
         # Name of the output file for the poses historic values.
-        if not self._filename:
+        if not self.process_data['filename']:
             exist_file = glob.glob("datatemp/*.xlsx")
             exist_file.sort()
             index = len (exist_file)
             datestamp_file = "{}".format(time.strftime("%d_%m_%Y"))
-            self._filename = "{}_{}-L{}-R{}".format(datestamp_file, (index+1),
-                            self._sp_left, self._sp_right)
+            self.process_data['filename'] = "{}_{}-L{}-R{}".format(
+                                                                 datestamp_file,
+                                                                 (index+1),
+                                                   self.process_data['sp_left'],
+                                                  self.process_data['sp_right'])
             datestamp_text = '{}_{}'.format(datestamp_file, (index+1))
-        name_txt = "datatemp/{}.txt".format(self._filename)
+        name_txt = "datatemp/{}.txt".format(self.process_data['filename'])
         #Header for numpy savetxt.
         header_numpy = ''
-        cols = self._header.shape[0]
+        cols = self.process_data['header'].shape[0]
         for col in range (0, cols):
-            element = self._header[col]
+            element = self.process_data['header'][col]
             element = '%9s' % (element)
             header_numpy = '{}{}\t'.format(header_numpy, element)
         #Call to save data in textfile.
         np.savetxt(name_txt, work_data, delimiter='\t', fmt='%9.2f',
                    header=header_numpy, comments='')
         #Experiment conditions.
-        self._exp_conditions = (" -Use camera 3\n -Position initial experiment forward: "
-                          "right rear wheel profile (-1400, -600), rear axis UGV in "
-                          "axis y, in -1800 x\n -Time: 3 seconds")
-        self.write_spreadsheet()
+        self.process_data['exp_conditions'] = (" -Use camera 3\n -Position"
+                          "initial experiment forward: right rear wheel profile"
+                          " (-1400, -600), rear axis UGV in axis y, in -1800 x"
+                          "\n -Time: 3 seconds")
+        wf.write_spreadsheet(self.process_data)
         return work_data
 
-    def save2master_txt(data_master):
+    def save2master_txt(self):
         """
         Average speed, setpoint left and right wheels are saved in the same textfile.
 
@@ -263,7 +268,7 @@ class DataAnalyzer(object):
                 value = '%9.2f' % (value)
                 text = '{}\t\t{}'.format(text, value)
         text = '{}\n'.format(text)
-        with open("datatemp/masterfile4.txt", 'a') as outfile:
+        with open("datatemp/masterfile.txt", 'a') as outfile:
             outfile.write(text)
 
 
@@ -281,17 +286,20 @@ def main():
     # #numbers_filename = re.findall(r'\d+', name_spreadsheet)
     # #sp_left = int(numbers_filename[4])
     # #sp_right = int(numbers_filename[5])
-    #
-    #
+
+    analysis = DataAnalyzer()
+    analysis.upload_filename("31_05_2017_201-L255-R255b.xlsx")
+    analysis.upload_data(wf.read_data(analysis.process_data))
+    analysis.get_diff_data()
     # #TODO Try, except correct value.
-    # sp_left = input("Introduce value of sp_left between 0 and 255\n")
-    # sp_right = input("Introduce value of sp_right between 0 and 255\n")
-    new_wb = workbookfunctions.SensorDataWorkbook()
-    data1 = new_wb.read_data()
-    # treatment = DataSaver()
-    # treatment.upload_data(data1)
-    # treatment.get_diff_data()
-    # treatment.save2data(True)
+    sp_left = input("Introduce value of sp_left between 0 and 255\n")
+    sp_right = input("Introduce value of sp_right between 0 and 255\n")
+    analysis.upload_setpoints_save(sp_left, sp_right)
+    analysis.upload_filename(None)
+    analysis.save2data(save_analyzed=True)
+    wf.save2master_xlsx(analysis.process_data)
+    #import pdb; pdb.set_trace()
+
 
 if __name__ == '__main__':
     main()
