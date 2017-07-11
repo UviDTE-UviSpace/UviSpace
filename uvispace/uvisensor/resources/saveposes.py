@@ -34,11 +34,12 @@ class DataAnalyzer(object):
     :param float64 avg_speed: average linear speed of UGV.
     :param float64 avg_ang_speed: average angular speed of UGV.
     """
-    def __init__(self, data=np.array([0, 0, 0, 0]).astype(np.float64)):
+    def __init__(self, data=np.zeros((1,4)), analyzed_data=np.zeros((1,11)),
+                 avg_speed=0, avg_ang_speed=0):
         self._raw_data = data
-        self._analyzed_data = np.zeros((1, 11))
-        self._avg_speed = 0
-        self._avg_ang_speed = 0
+        self._analyzed_data = analyzed_data
+        self._avg_speed = avg_speed
+        self._avg_ang_speed = avg_ang_speed
 
     def upload_data(self, data):
         """Update data matrix with time and poses.
@@ -97,14 +98,14 @@ class DataAnalyzer(object):
         mode_upper = stats.mode(self._raw_data[0:20, 1:3])[0]
         mode_rows = np.all(self._raw_data[:, 1:3]==mode_upper, axis=1)
         indexes = np.where(mode_rows)[0]
-        # If there are no initial values ​​of stopped UGV is not updated.
+        # If there are not initial values of stopped UGV is not updated.
         if indexes.shape[0] > 0:
             row_upper = indexes.max()
         # Final repeated data calculation.
         mode_lower = stats.mode(self._raw_data[(rows-20):rows, 1:3])[0]
         mode_rows = np.all(self._raw_data[:, 1:3]==mode_lower, axis=1)
         indexes = np.where(mode_rows)[0]
-        # If there are no final values ​​of stopped UGV is not updated.
+        # If there are not final values of stopped UGV is not updated.
         if indexes.shape[0] > 0:
             row_lower = indexes.min() + 1
         # UGV data in motion.
@@ -122,7 +123,7 @@ class DataAnalyzer(object):
         experiment.
 
         :returns: [formatted_data, avg_speed, avg_ang_speed]
-          * *formatted_data* data with differential values ​​and angular
+          * *formatted_data* data with differential values and angular
             and linear speeds.
           * *avg_speed* average linear speed of UGV.
           * *avg_ang_speed* average angular speed of UGV.
@@ -134,21 +135,25 @@ class DataAnalyzer(object):
         # First sample, time zero.
         work_data[:, 0] -= work_data[0, 0]
         # Differential data matrix: current data minus previous data.
-        # diff_data = np.zeros_like(self._raw_data)
-        diff_data = work_data[1:rows, :] - work_data[0:(rows-1), :]
+        diff_data = np.zeros_like(work_data)
+        diff_data[1:rows, :] = work_data[1:rows, :] - work_data[0:(rows-1), :]
+        # first_row = np.zeros((1,4))
+        # diff_data = np.vstack([first_row, diff_data])
         # Vector differential length displaced.
         diff_length = np.sqrt(diff_data[:, 1]**2 + diff_data[:, 2]**2)
         # The direction is negative when the angular speed and vehicle angle
         # difference is bigger than pi/2 (90 degrees).
         speed_angles = np.arctan2(diff_data[:, 2], diff_data[:, 1])
-        sign_spd = np.ones([rows, 1])
+        #import pdb; pdb.set_trace()
+        sign_spd = np.ones([(rows), 1])
         sign_spd[np.abs(work_data[:, 3] - speed_angles) > (np.pi/2)] *= -1
         diff_speed = sign_spd[1:, 0] * 1000 * diff_length[1:]/diff_data[1:, 0]
         diff_speed = np.hstack([0, diff_speed])
         # Vector differential angular speed.
-        diff_angl_speed = 1000 * diff_data[1:rows, 3] / diff_data[1:rows, 0]
+        diff_angl_speed = np.zeros(rows)
+        diff_angl_speed[1:rows] = 1000 * diff_data[1:rows, 3] / diff_data[1:rows, 0]
         # Complete differential data matrix with new data.
-        diff_data = np.hstack([np.zeros(rows, 1), diff_data])
+        # diff_data = np.hstack([np.zeros(rows, 1), diff_data])
         diff_data = np.insert(diff_data, 4, diff_length, axis=1)
         diff_data = np.insert(diff_data, 5, diff_speed, axis=1)
         diff_data = np.insert(diff_data, 6, diff_angl_speed, axis=1)
@@ -168,7 +173,7 @@ class DataAnalyzer(object):
         self._avg_ang_speed = avg_ang_speed
         return (formatted_data, avg_speed, avg_ang_speed)
 
-def read_data(name_spreadsheet="31_05_2017_201-L255-R255c.xlsx"):
+def read_data(name_spreadsheet="31_05_2017_201-L255-R255b.xlsx"):
     """It allows to read poses and time of spreadsheet.
 
     These data are stored in the "data" matrix.
@@ -249,18 +254,22 @@ cell_formats = {
                                              end_color='FF2F79E6'),
     'skyblue_fill': openpyxl.styles.PatternFill(fill_type='solid',
                                                 start_color='FFDBF4FA',
-                                                end_color='FFDBF4FA')
+                                                end_color='FFDBF4FA'),
     'white_fill': openpyxl.styles.PatternFill(fill_type='solid',
                                               start_color='FFFFFFFF',
                                               end_color='FFFFFFFF')
 }
 class DataSaver(DataAnalyzer):
 
-    def __init__(self):
+    def __init__(self, data=np.zeros((1,4)), analyzed_data=np.zeros((1,11)),
+                 avg_speed=0, avg_ang_speed=0):
         self._filename = None
         self._sp_left = 0
         self._sp_right = 0
         self._exp_conditions = ""
+        self._data_to_save = 0
+        self._header = ""
+        self._save_analyzed = False
 
     def upload_setpoints_save(self, sp_left, sp_right):
 
@@ -275,27 +284,23 @@ class DataSaver(DataAnalyzer):
 
         return filename
 
-    def save2data(self, save_raw=True):
-
-        if save_raw:
-            data_to_save = self._raw_data
-        else:
-            data_to_save = self._analyzed_data
-        #First sample, time zero.
-        rows, cols = data_to_save.shape
-        data_to_save[:, 0] = data_to_save[:, 0] - data_to_save[0, 0]
-        data_to_save = data_to_save
-        #Header construction
-        if cols == 4:
-            header_text = np.array(['Time', 'Pos x', 'Pos y', 'Angle'])
-        elif cols == 11:
-            header_text = np.array(['Time', 'Pos x', 'Pos y', 'Angle',
+    def save2data(self, save_analyzed=False):
+        self._save_analyzed = save_analyzed
+        if self._save_analyzed:
+            work_data = np.copy(self._analyzed_data)
+            # Header construction.
+            self._header = np.array(['Time', 'Pos x', 'Pos y', 'Angle',
                                     'Diff Time', 'Diff Posx', 'Diff Posy',
                                     'Diff Angl', 'Diff Leng', 'Rel Speed',
                                     'Rel AnSpd'])
         else:
-            pass
-        full_data = np.vstack([header_text, data_to_save])
+            work_data = np.copy(self._raw_data)
+            # Header construction.
+            self._header = np.array(['Time', 'Pos x', 'Pos y', 'Angle'])
+        #First sample, time zero.
+        rows, cols = work_data.shape
+        work_data[:, 0] = work_data[:, 0] - work_data[0, 0]
+        self._data_to_save = np.copy(work_data)
         # Name of the output file for the poses historic values.
         if not self._filename:
             exist_file = glob.glob("datatemp/*.xlsx")
@@ -308,21 +313,20 @@ class DataSaver(DataAnalyzer):
         name_txt = "datatemp/{}.txt".format(self._filename)
         #Header for numpy savetxt.
         header_numpy = ''
-        cols = header_text.shape[0]
+        cols = self._header.shape[0]
         for col in range (0, cols):
-            element = header_text[col]
+            element = self._header[col]
             element = '%9s' % (element)
             header_numpy = '{}{}\t'.format(header_numpy, element)
         #Call to save data in textfile.
-        np.savetxt(name_txt, data_to_save, delimiter='\t', fmt='%9.2f',
+        np.savetxt(name_txt, work_data, delimiter='\t', fmt='%9.2f',
                    header=header_numpy, comments='')
         #Experiment conditions.
         self._exp_conditions = (" -Use camera 3\n -Position initial experiment forward: "
                           "right rear wheel profile (-1400, -600), rear axis UGV in "
                           "axis y, in -1800 x\n -Time: 3 seconds")
-        self._data_to_save = data_to_save
-        write_spreadsheet()
-        return
+        self.write_spreadsheet()
+        return work_data
 
     def write_spreadsheet(self):
         """
@@ -353,59 +357,60 @@ class DataSaver(DataAnalyzer):
         my_cell = ws['B7']
         ws.freeze_panes = my_cell
         #Write in spreadsheet the headboard.
-        rows, cols = self._raw_data.shape
-        for y in range (0, cols):
-            ws.cell(column=col+1, row=6, value=header[col])
+        rows, cols = self._data_to_save.shape
+        for col in range (0, cols):
+            ws.cell(column=col+1, row=6, value=self._header[col])
             ws.cell(column=col+1, row=6).alignment = cell_formats['right_al']
             ws.cell(column=col+1, row=6).font = cell_formats['white_ft']
             ws.cell(column=col+1, row=6).fill = cell_formats['blue_fill']
             ws.cell(column=col+1, row=6).border = cell_formats['thick_bd']
         #Write in spreadsheet the data.
-        for row in range(1, rows):
+        for row in range(0, rows):
             for col in range(0, cols):
-                element = float(data[row,col])
-                ws.cell(column=col+1, row=row+6, value=element).number_format = '0.00'
+                element = float(self._data_to_save[row,col])
+                ws.cell(column=col+1, row=row+7, value=element).number_format = '0.00'
                 if row % 2 != 0:
-                    ws.cell(column=col+1, row=row+6).fill = cell_formats[
+                    ws.cell(column=col+1, row=row+7).fill = cell_formats[
                                                                  'skyblue_fill']
                 else:
-                    ws.cell(column=col+1, row=row+6).fill = cell_formats[
+                    ws.cell(column=col+1, row=row+7).fill = cell_formats[
                                                                    'white_fill']
-                my_cell = ws.cell(column=col+1, row=row+6)
+                my_cell = ws.cell(column=col+1, row=row+7)
                 ws.column_dimensions[my_cell.column].width = 10
         #Write in spreadsheet the name of statistics.
-        for row in range(rows+6, rows+12):
-            ws.merge_cells(start_row=row,start_column=1,end_row=row,end_column=4)
-            ws.cell(column=1, row=row).alignment = cell_formats('right_al')
-            ws.cell(column=1, row=row).fill = cell_formats('blue_fill')
-            ws.cell(column=1, row=row).font = cell_formats('white_ft')
-        ws.cell(column=1, row=rows+6, value='Sum differential data:')
-        ws.cell(column=1, row=rows+7, value='Mean of differential data:')
-        ws.cell(column=1, row=rows+8, value='Variance differential data:')
-        ws.cell(column=1, row=rows+9, value='Std deviation differential data:')
-        ws.cell(column=8, row=rows+10, value='Linear Relative Speed:')
-        ws.cell(column=8, row=rows+11, value='Angular Relative Speed:')
-        ws.merge_cells(start_row=rows+10,start_column=8,end_row=rows+10,end_column=10)
-        ws.merge_cells(start_row=rows+11,start_column=8,end_row=rows+11,end_column=10)
-        ##Write and calculate in spreadsheet the statistics.
-        for col in range(5, cols+1):
-            letter_range = openpyxl.utils.get_column_letter(col)
-            start_range = '{}{}'.format(letter_range, 7)
-            end_range = '{}{}'.format(letter_range, rows+5)
-            interval = '{}:{}'.format(start_range,end_range)
-            ws.cell(column=col, row=rows+6, value= '=SUM({})\n'.format(interval))
-            ws.cell(column=col, row=rows+7, value= '=AVERAGE({})\n'.format(interval))
-            ws.cell(column=col, row=rows+8, value= '=VAR({})\n'.format(interval))
-            ws.cell(column=col, row=rows+9, value= '=STDEV({})\n'.format(interval))
-            for row in range(rows+6, rows+12):
-                ws.cell(column=col, row=row).number_format = '0.00'
-                ws.cell(column=col, row=row).font = cell_formats('white_ft')
-                ws.cell(column=col, row=row).fill = cell_formats('blue_fill')
-                ws.cell(column=col, row=row).alignment = cell_formats('right_al')
-        ws.cell(column=11, row=rows+10, value= '=1000*SQRT(((B{rows}-B7)^2)+'
-                '(((C{rows}-C7)^2)))/E{rows2}\n'.format(rows=rows+5, rows2=rows+6))
-        ws.cell(column=11, row=rows+11, value= '=1000*(D{rows}-D7)/'
-                                    'E{rows2}\n'.format(rows=rows+5, rows2=rows+6))
+        if self._save_analyzed:
+            for row in range(rows+7, rows+11):
+                ws.merge_cells(start_row=row,start_column=1,end_row=row,end_column=4)
+                ws.cell(column=1, row=row).alignment = cell_formats['right_al']
+                ws.cell(column=1, row=row).fill = cell_formats['blue_fill']
+                ws.cell(column=1, row=row).font = cell_formats['white_ft']
+            ws.cell(column=1, row=rows+7, value='Sum differential data:')
+            ws.cell(column=1, row=rows+8, value='Mean of differential data:')
+            ws.cell(column=1, row=rows+9, value='Variance differential data:')
+            ws.cell(column=1, row=rows+10, value='Std deviation differential data:')
+            ws.cell(column=8, row=rows+11, value='Linear Relative Speed:')
+            ws.cell(column=8, row=rows+12, value='Angular Relative Speed:')
+            ws.merge_cells(start_row=rows+11,start_column=8,end_row=rows+11,end_column=10)
+            ws.merge_cells(start_row=rows+12,start_column=8,end_row=rows+12,end_column=10)
+            ##Write and calculate in spreadsheet the statistics.
+            for col in range(5, cols+1):
+                letter_range = openpyxl.utils.get_column_letter(col)
+                start_range = '{}{}'.format(letter_range, 7)
+                end_range = '{}{}'.format(letter_range, rows+5)
+                interval = '{}:{}'.format(start_range,end_range)
+                ws.cell(column=col, row=rows+7, value= '=SUM({})\n'.format(interval))
+                ws.cell(column=col, row=rows+8, value= '=AVERAGE({})\n'.format(interval))
+                ws.cell(column=col, row=rows+9, value= '=VAR({})\n'.format(interval))
+                ws.cell(column=col, row=rows+10, value= '=STDEV({})\n'.format(interval))
+                for row in range(rows+7, rows+13):
+                    ws.cell(column=col, row=row).number_format = '0.00'
+                    ws.cell(column=col, row=row).font = cell_formats['white_ft']
+                    ws.cell(column=col, row=row).fill = cell_formats['blue_fill']
+                    ws.cell(column=col, row=row).alignment = cell_formats['right_al']
+            ws.cell(column=11, row=rows+11, value= '=1000*SQRT(((B{rows}-B7)^2)+'
+                    '(((C{rows}-C7)^2)))/E{rows2}\n'.format(rows=rows+5, rows2=rows+7))
+            ws.cell(column=11, row=rows+12, value= '=1000*(D{rows}-D7)/'
+                                        'E{rows2}\n'.format(rows=rows+5, rows2=rows+7))
         wb.save(name_spreadsheet)
 
         return name_spreadsheet
@@ -473,11 +478,11 @@ class DataSaver(DataAnalyzer):
             else:
                 ws.column_dimensions[my_cell.column].width = 10
             if row % 2 != 0:
-                ws.cell(column=y, row=row).fill = cell_formats('skyblue_fill')
+                ws.cell(column=y, row=row).fill = cell_formats['skyblue_fill']
             else:
-                ws.cell(column=y, row=row).fill = cell_formats('white_fill')
+                ws.cell(column=y, row=row).fill = cell_formats['white_fill']
             if y < 6:
-                ws.cell(column=y, row=row).alignment = cell_formats('right_al')
+                ws.cell(column=y, row=row).alignment = cell_formats['right_al']
         wb.save("datatemp/masterfile4.xlsx")
 
     def save2master_txt(data_master):
@@ -504,24 +509,30 @@ class DataSaver(DataAnalyzer):
             outfile.write(text)
 
 
-    def main():
-        o_exist_file = glob.glob("./datatemp/*.xlsx")
-        o_exist_file.sort()
-        o_index = len (o_exist_file)
-        names = [os.path.basename(x) for x in o_exist_file]
-        import pdb; pdb.set_trace()
-        for y in range (0, o_index-1):
-            #import pdb; pdb.set_trace()
-            print names[y]
-            data_matrix = read_data(name_spreadsheet='datatemp/' + names[y])
+def main():
+    # o_exist_file = glob.glob("./datatemp/*.xlsx")
+    # o_exist_file.sort()
+    # o_index = len (o_exist_file)
+    # names = [os.path.basename(x) for x in o_exist_file]
+    # import pdb; pdb.set_trace()
+    # for y in range (0, o_index-1):
+    #     #import pdb; pdb.set_trace()
+    #     print names[y]
+    #     data_matrix = read_data(name_spreadsheet='datatemp/' + names[y])
+    #
+    # #numbers_filename = re.findall(r'\d+', name_spreadsheet)
+    # #sp_left = int(numbers_filename[4])
+    # #sp_right = int(numbers_filename[5])
+    #
+    #
+    # #TODO Try, except correct value.
+    # sp_left = input("Introduce value of sp_left between 0 and 255\n")
+    # sp_right = input("Introduce value of sp_right between 0 and 255\n")
+    data1 = read_data()
+    treatment = DataSaver()
+    treatment.upload_data(data1)
+    treatment.get_diff_data()
+    treatment.save2data(True)
 
-        #numbers_filename = re.findall(r'\d+', name_spreadsheet)
-        #sp_left = int(numbers_filename[4])
-        #sp_right = int(numbers_filename[5])
-
-
-        #TODO Try, except correct value.
-        sp_left = input("Introduce value of sp_left between 0 and 255\n")
-        sp_right = input("Introduce value of sp_right between 0 and 255\n")
 if __name__ == '__main__':
     main()
