@@ -31,6 +31,7 @@ import time
 import numpy as np
 import zmq
 # Local libraries
+import kalmanfilter
 import videosensor
 
 try:
@@ -270,6 +271,11 @@ class DataFusionThread(threading.Thread):
         self._ntriangles = copy.copy(self.ntriangles)
         self._inborders = copy.copy(self.inborders)
         self._reset_flags = copy.copy(self.reset_flags)
+        # Kalman filter instance with 3 variables (x, y, theta)
+        # and 2 inputs (linear and angular speeds).
+        self.kalman = kalmanfilter.Kalman(var_dim=3, input_dim=2)
+        # Set the process noise, calculated empirically. units = (mm, mm, rad)^2
+        self.kalman.set_prediction_noise((3.5**2, 3.5**2, 0.015**2))
 
     def run(self):
         """Main routine of the DataFusionThread."""
@@ -277,9 +283,13 @@ class DataFusionThread(threading.Thread):
         for event in self.begin_events:
             event.wait()
         triangle = []
+        speeds = None
+        publish_time = None
         while not self.end_event.isSet():
             # Start the cycle timer
             cycle_start_time = time.time()
+            # Boolean for updating the Kalman measurement noise.
+            detected_triangle = False
             # Loop with N iterations, being N the number of camera threads.
             for index, condition in enumerate(self.conditions):
                 # Threads synchronized instructions.
@@ -342,14 +352,36 @@ class DataFusionThread(threading.Thread):
                     self.reset_flags[index2].update(self._reset_flags[index2])
                     self.conditions[index2].release()
             # TODO merge the content of every dictionary in triangle
-            # Increment the iterations counter.
-            self.step += 1
-            # Scan for detected triangle and publish it.
+            # Calculate the time between iterations, for the Kalman prediction.
+            if publish_time:
+                delta_t = time.time() - publish_time
+            else:
+                delta_t = 0
+            detected_triangle = False
+            # Scan for detected triangle and process it.
             for element in self._triangles:
                 if '1' in element:
                     if element['1'] is not None:
+                        detected_triangle = True
                         triangle = copy.copy(element['1'])
-            if triangle:
+            # The triangle is void at initialization, before it is detected for
+            # the first time. If this is the case, ignore the rest of the loop.
+            if not triangle:
+                continue
+            if speeds:
+                inputs = np.array([speeds['linear'], speeds['angular']])
+                inputs = inputs.reshape(2,1)
+                # Multiply the difference time by the number of steps that were
+                # missed. This should be reflected as well in the noise.
+                delta_t *= (1 + self.step - speeds['step'])
+                self.kalman.predict(inputs, delta_t)
+                self.kalman.set_prediction_noise((3.5**2, 3.5**2, 0.015**2))
+            else:
+                self.kalman.set_prediction_noise((1000**2, 1000**2, 2*np.pi**2))
+            # Increment the iterations counter.
+            self.step += 1
+            # Update the measured pose only if a triangle was detected.
+            if detected_triangle:
                 pose = triangle.get_pose()
                 # Convert coordinates to meters.
                 mpose = [np.asscalar(pose[0]) / 1000,
@@ -357,13 +389,23 @@ class DataFusionThread(threading.Thread):
                          np.asscalar(pose[2])]
                 logger.info("Detected triangle at {}mm and {} radians."
                                "".format(pose[0:2], pose[2]))
-                # TODO Update Kalman filter and obtain filtered pose.
-                pose_msg = {'x': mpose[0], 'y': mpose[1], 'theta': mpose[2],
-                            'step': self.step}
-                self.sockets['pose_publisher'].send_json(pose_msg)
+                # Set the measurement noise to the cameras error, calculated
+                # empirically.
+                camera_noise = (50**2, 50**2, (2*np.pi/180)**2)
+            # Set a very high measurement noise if the triangle is not detected.
+            else:
+                camera_noise = (1000**2, 1000**2, 2*np.pi**2)
+            self.kalman.set_measurement_noise(camera_noise)
+            new_state = self.kalman.update(pose)
+            pose_msg = {'x': mpose[0], 'y': mpose[1], 'theta': mpose[2],
+                        'step': self.step}
+            self.sockets['pose_publisher'].send_json(pose_msg)
+            publish_time = time.time()
             logger.debug("Triangles at: {}".format(self._triangles))
-            # Allow to poll only during the remaining cycletime.
+            # Allow to poll only during the remaining cycle time.
             polling_time = self.cycletime - (time.time()-cycle_start_time)
+            # Subtract another amount of time for doing the other routines.
+            polling_time -= 0.005
             events = dict(self.poller.poll(polling_time))
             if (self.sockets['speed_subscriber'] in events
                     and events[self.sockets['speed_subscriber']] == zmq.POLLIN):
@@ -373,10 +415,10 @@ class DataFusionThread(threading.Thread):
                 # Set speeds to None in order to ignore Kalman prediction step.
                 speeds = None
                 logger.debug("Not received any speed set point from controller")
-            # Sleep the rest of the cycle
+            # Sleep the rest of the cycle.
             while (time.time() - cycle_start_time < self.cycletime):
                 pass
-        # Cleanup resources
+        # Clean up resources
         for socket in self.sockets:
             self.sockets[socket].close()
         return
@@ -385,7 +427,7 @@ class DataFusionThread(threading.Thread):
 class UserThread(threading.Thread):
     """Child class of threading.Thread for interacting with user.
 
-    The *run* method, where is specified the behavior when the *start*
+    The *run* method, where is specified the behaviour when the *start*
     method is called, is overridden. Ask the user for commands through
     keyboard.
 
@@ -414,7 +456,7 @@ class UserThread(threading.Thread):
             # Start the cycle timer
             cycle_start_time = time.time()
             i = raw_input("Press 'Q' to stop the script... ")
-            if i == 'Q':
+            if i in ('q', 'Q'):
                 self.end_event.set()
             # Sleep the rest of the cycle
             while (time.time() - cycle_start_time < self.cycletime):
@@ -434,9 +476,9 @@ def main():
     threads = []
     # A Condition object for each camera thread execution.
     conditions = []
-    # Shared variable for storing triangles. Writable only by CameraThreads.
+    # Shared variable for storing triangles. Writeable only by CameraThreads.
     triangles = [{}, {}, {}, {}]
-    # Shared variable for storing triangles. Writable only by DataFusionThread.
+    # Shared variable for storing triangles. Writeable only by DataFusionThread.
     ntriangles = [{}, {}, {}, {}]
     # Shared variable for storing the presence of UGVs in borders regions.
     inborders = [{'1': False}, {'1': False}, {'1': False}, {'1': False}]
