@@ -1,10 +1,10 @@
 #!/usr/bin/env python
 """Multithreading routine for controlling external FPGAs with cameras.
 
-The module creates several parallel threads, in order to optimize the 
-execution time, as it contains several instructions which require 
-waiting for external resources before continuing execution e.g. waiting 
-for the TCP/IP client to deliver FPGA registers information. Namely, 6 
+The module creates several parallel threads, in order to optimize the
+execution time, as it contains several instructions which require
+waiting for external resources before continuing execution e.g. waiting
+for the TCP/IP client to deliver FPGA registers information. Namely, 6
 different threads are managed and indexed in a list called *threads*:
 
 * 4 threads that run the 4 FGPAs initialization routines. Afterwards,
@@ -15,70 +15,76 @@ different threads are managed and indexed in a list called *threads*:
   each FPGA thread and obtain global UGVs' positions.
 
 NOTE: The proper way to end the program is to press 'Q', as the terminal
-prompt indicates during execution. If the Keyboard Interrupt is used 
-instead, it will probably corrupt the TCP/IP socket and the FPGAs will 
+prompt indicates during execution. If the Keyboard Interrupt is used
+instead, it will probably corrupt the TCP/IP socket and the FPGAs will
 have to be reset.
 """
 # Standard libraries
 import copy
-import os
 import glob
+import logging
+import os
+import sys
 import threading
 import time
-import logging
 # Third party libraries
 import numpy as np
 import zmq
 # Local libraries
 import videosensor
 
-# Logging setup
-import settings
+try:
+    # Logging setup.
+    import settings
+except ImportError:
+    # Exit program if the settings module can't be found.
+    sys.exit("Can't find settings module. Maybe environment variables are not"
+             "set. Run the environment .sh script at the project root folder.")
 logger = logging.getLogger('sensor')
 
 
 class CameraThread(threading.Thread):
     """Child class of threading.Thread for capturing frames from a camera.
 
-    The *run* method, where is specified the behavior when the *start* 
-    method is called, is overridden. At first, it loads the FPGA 
-    configuration. Then it enters an endless loop until *end_event* 
-    flag is raised. At each iteration, when possible, reads the FPGA 
-    register containing triangles location, processes the data and 
+    The *run* method, where is specified the behavior when the *start*
+    method is called, is overridden. At first, it loads the FPGA
+    configuration. Then it enters an endless loop until *end_event*
+    flag is raised. At each iteration, when possible, reads the FPGA
+    register containing triangles location, processes the data and
     writes it to the global shared variable *triangles*.
 
-    :param triangles: Dictionary where each element is an instance 
-     of *geometry.Triangle*. It is a global variable for sharing the 
-     information of different triangles detected in the camera space. 
-     Each triangle has a UNIQUE key identifier. It is used for 
+    :param triangles: Dictionary where each element is an instance
+     of *geometry.Triangle*. It is a global variable for sharing the
+     information of different triangles detected in the camera space.
+     Each triangle has a UNIQUE key identifier. It is used for
      writing and sending to other threads the triangle elements.
 
-    :param ntriangles: READ ONLY dictionary of the same type and shape 
-     as *triangles*. It contains the triangles detected by other cameras 
+    :param ntriangles: READ ONLY dictionary of the same type and shape
+     as *triangles*. It contains the triangles detected by other cameras
      that are inside the borders region of the current camera's space.
 
-    :param begin_event: *threading.Event* object that is set to True 
+    :param begin_event: *threading.Event* object that is set to True
      when the FPGA is configured and the thread begins the main loop.
 
-    :param end_event: *threading.Event* object that is set to True 
+    :param end_event: *threading.Event* object that is set to True
      when the execution has to end.
 
-    :param condition: *threading.Condition* object for synchronizing 
+    :param condition: *threading.Condition* object for synchronizing
      R/W operations on shared variables i.e. *triangles, inborders*.
 
-    :param inborders: READ ONLY dictionary whose elements indicate if 
-     the corresponding triangle is located within the borders region 
-     of current camera's space. Its keys have an univocal correspondence 
+    :param inborders: READ ONLY dictionary whose elements indicate if
+     the corresponding triangle is located within the borders region
+     of current camera's space. Its keys have an univocal correspondence
      with the key identifiers of the *triangles* dictionary.
 
-    :param reset_flag: READ ONLY dictionary of boolean elements. They 
-     are set to True when its corresponding triangle exits the current 
+    :param reset_flag: READ ONLY dictionary of boolean elements. They
+     are set to True when its corresponding triangle exits the current
      camera's space.
 
     :param name: String that provides the name of the thread.
 
-    :param conf_file: String containing the relative path to the 
-     configuration file of the camera.        
+    :param conf_file: String containing the relative path to the
+     configuration file of the camera.
     """
 
     def __init__(self, triangles, ntriangles, begin_event, end_event,
@@ -182,16 +188,16 @@ class CameraThread(threading.Thread):
 class DataFusionThread(threading.Thread):
     """Child class of threading.Thread for merging and processing data.
 
-    The *run* method, where is specified the behavior when the *start* 
-    method is called, is overridden. At first, it waits until all cameras 
-    are initialized. Then it enters an endless loop until the 
+    The *run* method, where is specified the behavior when the *start*
+    method is called, is overridden. At first, it waits until all cameras
+    are initialized. Then it enters an endless loop until the
     *end_event* flag is raised. At each iteration:
 
     - Check the triangles found by each *CameraThread*.
     - When a camera detects a triangle, it determines if the triangle is
-      in the borders region of another camera. If that is True, orders 
+      in the borders region of another camera. If that is True, orders
       the creating of a new ROI tracker in the second camera.
-    - Evaluate if an UGV exits a camera, deleting the ROI tracker if 
+    - Evaluate if an UGV exits a camera, deleting the ROI tracker if
       it is True.
     - Merge the information obtained in all the cameras.
 
@@ -200,10 +206,10 @@ class DataFusionThread(threading.Thread):
      set of coordinates of an UGV inside the Nth camera.
 
     :param ntriangles: WRITE N-len list of the same type and shape as
-     *triangles*, for exchanging triangles information between 
+     *triangles*, for exchanging triangles information between
      *CameraThreads*.
 
-    :param conditions: List containing N *threading.Condition* objects. 
+    :param conditions: List containing N *threading.Condition* objects.
      They are used for synchronizing the *CameraThreads* and the
      *DataFusionThread* when doing R/W operations on shared variables.
 
@@ -211,10 +217,10 @@ class DataFusionThread(threading.Thread):
      element is a flag set to True when the UGV is within the Nth camera
      borders region.
 
-    :param quadrant_limits: List containing N 4x2 arrays. Each array 
+    :param quadrant_limits: List containing N 4x2 arrays. Each array
      contains the 4 points defining the working space of the Nth camera.
 
-    :param end_event: *threading.Event* object that is set to True when 
+    :param end_event: *threading.Event* object that is set to True when
      the *UserThread* detects an 'end' order from the user.
 
     :param reset_flags: List containing N dictionaries whose entries are
@@ -230,11 +236,26 @@ class DataFusionThread(threading.Thread):
         Class constructor method
         """
         threading.Thread.__init__(self, name=name)
-        self.publisher = zmq.Context.instance().socket(zmq.PUB)
-        self.publisher.bind("tcp://*:{}".format(
-                int(os.environ.get("UVISPACE_BASE_PORT_POSITION"))+1))
         self.cycletime = 0.02
         self.quadrant_limits = quadrant_limits
+        self.step = 0
+        # Publishing socket instantiation.
+        pose_publisher = zmq.Context.instance().socket(zmq.PUB)
+        pose_publisher.bind("tcp://*:{}".format(
+                int(os.environ.get("UVISPACE_BASE_PORT_POSITION")) + 1))
+        # Open a subscribe socket and poller to listen for speed set points.
+        speed_subscriber = zmq.Context.instance().socket(zmq.SUB)
+        speed_subscriber.setsockopt_string(zmq.SUBSCRIBE, u"")
+        speed_subscriber.setsockopt(zmq.CONFLATE, True)
+        speed_subscriber.connect("tcp://localhost:{}".format(
+                int(os.environ.get("UVISPACE_BASE_PORT_SPEED")) + 1))
+        # Store sockets in dictionary
+        self.poller = zmq.Poller()
+        self.poller.register(speed_subscriber, zmq.POLLIN)
+        self.sockets = {
+            'pose_publisher': pose_publisher,
+            'speed_subscriber': speed_subscriber,
+        }
         # Synchronization variables
         self.conditions = conditions
         self.begin_events = begin_events
@@ -297,22 +318,21 @@ class DataFusionThread(threading.Thread):
                             self.quadrant_limits[index2])
                     # Update triangles[index2] if there is not any tracker
                     # initialized and UGV is within borders of the Camera.
-                    if (self._inborders[index2]['1'] and not
-                    self._triangles[index2]):
+                    if (self._inborders[index2]['1']
+                          and not self._triangles[index2]):
                         self._ntriangles[index2]['1'] = copy.copy(triangle)
                         self._reset_flags[index2]['1'] = False
-                        logger.info("New triangle in Camera{}".format(
-                                index2))
+                        logger.info("New triangle in Camera{}".format(index2))
                     # If the UGV is not in borders, but a tracker is set and is
                     # returning None values, it has to be reset.
-                    elif (not self._inborders[index2]['1'] and
-                                  self._triangles[index2].get('1', False) is None):
+                    elif (not self._inborders[index2]['1']
+                          and self._triangles[index2].get('1', False) is None):
                         self._reset_flags[index2]['1'] = True
                         self._ntriangles[index2].pop('1', None)
                     # If the UGV is not in borders and any tracker was detected,
                     # the reset flag has to be cleared.
-                    elif (not self._inborders[index2]['1'] and
-                                  self._triangles[index2].get('1', False) is False):
+                    elif (not self._inborders[index2]['1']
+                          and self._triangles[index2].get('1', False) is False):
                         self._reset_flags[index2]['1'] = False
                         self._ntriangles[index2].pop('1', None)
                     # Sync operations. Write to global variables
@@ -322,10 +342,11 @@ class DataFusionThread(threading.Thread):
                     self.reset_flags[index2].update(self._reset_flags[index2])
                     self.conditions[index2].release()
             # TODO merge the content of every dictionary in triangle
-
+            # Increment the iterations counter.
+            self.step += 1
             # Scan for detected triangle and publish it.
             for element in self._triangles:
-                if element.has_key('1'):
+                if '1' in element:
                     if element['1'] is not None:
                         triangle = copy.copy(element['1'])
             if triangle:
@@ -334,29 +355,45 @@ class DataFusionThread(threading.Thread):
                 mpose = [np.asscalar(pose[0]) / 1000,
                          np.asscalar(pose[1]) / 1000,
                          np.asscalar(pose[2])]
-                logger.debug("detected triangle at {}mm and {} radians."
+                logger.info("Detected triangle at {}mm and {} radians."
                                "".format(pose[0:2], pose[2]))
-                pose_msg = {'x': mpose[0], 'y': mpose[1], 'theta': mpose[2]}
-                self.publisher.send_json(pose_msg)
-            logger.info("Triangles at: {}".format(self._triangles))
-            # logger.info("Borders: {}".format(self._inborders))
+                # TODO Update Kalman filter and obtain filtered pose.
+                pose_msg = {'x': mpose[0], 'y': mpose[1], 'theta': mpose[2],
+                            'step': self.step}
+                self.sockets['pose_publisher'].send_json(pose_msg)
+            logger.debug("Triangles at: {}".format(self._triangles))
+            # Allow to poll only during the remaining cycletime.
+            polling_time = self.cycletime - (time.time()-cycle_start_time)
+            events = dict(self.poller.poll(polling_time))
+            if (self.sockets['speed_subscriber'] in events
+                    and events[self.sockets['speed_subscriber']] == zmq.POLLIN):
+                speeds = self.sockets['speed_subscriber'].recv_json()
+                logger.debug("Received new speed set point: {}".format(speeds))
+            else:
+                # Set speeds to None in order to ignore Kalman prediction step.
+                speeds = None
+                logger.debug("Not received any speed set point from controller")
             # Sleep the rest of the cycle
             while (time.time() - cycle_start_time < self.cycletime):
                 pass
+        # Cleanup resources
+        for socket in self.sockets:
+            self.sockets[socket].close()
+        return
 
 
 class UserThread(threading.Thread):
     """Child class of threading.Thread for interacting with user.
 
-    The *run* method, where is specified the behavior when the *start* 
+    The *run* method, where is specified the behavior when the *start*
     method is called, is overridden. Ask the user for commands through
     keyboard.
 
-    :param begin_events: List with N *threading.Event* objects, where N 
-     is the number of Camera threads. Until the set up of every camera 
+    :param begin_events: List with N *threading.Event* objects, where N
+     is the number of Camera threads. Until the set up of every camera
      is finished, the user can not interact with this thread.
-    
-    :param end_event: *threading.Event* object that is set to True when 
+
+    :param end_event: *threading.Event* object that is set to True when
      the *UserThread* detects an 'end' order from the user.
     """
 
@@ -386,9 +423,9 @@ class UserThread(threading.Thread):
 
 def main():
     """Main routine for multiplecamera.py
-    
+
     Read configuration files, initialize variables and set up threads.
-    :return: 
+    :return:
     """
     logger.info("BEGINNING MAIN EXECUTION")
     # Get the relative path to all the config files stored in /config folder.

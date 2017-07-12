@@ -73,8 +73,9 @@ class Triangle(object):
         Finally, a scale ratio *K* will be applied to the coordinates. 
         The coordinates will be directly multiplied by the ratio.
 
-        :param list[int, int] offsets: column and row offsets between 
-          the local and the global systems.
+        :param offsets: column and row offsets between the local and the
+          global systems.
+        :type offsets: list[int, int]
         :param K: Scale ratio to be applied to the points coordinates.
         :type K: positive int or float
         :param bool image2cartesian: If True, a conversion from image 
@@ -130,9 +131,9 @@ class Triangle(object):
         Only absolute coordinates shall be transformed. Lengths and 
         angles are invariant to the coordinate origin.
     
-        :param list[int, int] offsets: column and row offsets between 
-          the local and the global systems.
-
+        :param offsets: column and row offsets between the local and the
+          global systems.
+        :type offsets: list[int, int]
         :param K: Scale ratio to be applied to the points coordinates.
         :type K: positive int or float
         :param bool cartesian2image: If True, a conversion from 
@@ -285,7 +286,7 @@ class Triangle(object):
         :return: the new vertices coordinates values.
         """
         points = np.copy(self.vertices)
-        # Loop for performing the homography to very 2-D vertex' coordinates.
+        # Loop for performing the homography to every 2-D vertex' coordinates.
         for index, row in enumerate(points):
             # Append '1' to the point vector and perform a matrix product with H
             operand = np.hstack([row, 1])
@@ -310,7 +311,7 @@ class Triangle(object):
         :return: the new vertices coordinates values.
         """
         points = np.copy(self.vertices)
-        # Loop for performing the homography to very 2-D vertex' coordinates.
+        # Loop for performing the homography to every 2-D vertex' coordinates.
         for index, row in enumerate(points):
             # Append '1' to the point vector and perform a matrix product with H
             operand = np.hstack([row, 1])
