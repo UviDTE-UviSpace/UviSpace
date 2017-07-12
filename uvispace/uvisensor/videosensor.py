@@ -8,21 +8,25 @@ class and its methods.
 # Standard libraries
 import ast
 import ConfigParser
+import logging
+import socket
+import sys
+# Third party libraries
 import numpy as np
 import pylab
 from scipy import misc
-import socket
-import sys
-
-# ROS libraries
-try:
-    import rospy
-except:
-    import logging
-
 # Local libraries
 from client import Client
 import imgprocessing
+
+try:
+    # Logging setup.
+    import settings
+except ImportError:
+    # Exit program if the settings module can't be found.
+    sys.exit("Can't find settings module. Maybe environment variables are not"
+             "set. Run the environment .sh script at the project root folder.")
+logger = logging.getLogger("sensor")
 
 
 def camera_startup(filename):
@@ -34,6 +38,7 @@ def camera_startup(filename):
     # Instantiate VideoSensor class. The filename contains the configuration
     camera = VideoSensor(filename)
     if not camera._connected:
+        logger.error("No connection to specified camera.")
         raise AttributeError("No connection to specified camera.")
     camera.load_configuration()
     # Reset trackers
@@ -100,8 +105,7 @@ def set_tracker(camera, image=[]):
 
 
 class VideoSensor(object):
-    """
-    This class contains methods for dealing with FPGA-camera system.
+    """This class contains methods for dealing with FPGA-camera system.
 
     :param str filename: Path to the configuration file of the camera. 
      The path shall be passed relatively to the script directory.
@@ -151,32 +155,21 @@ class VideoSensor(object):
             self.connect_client()
 
     def connect_client(self):
-        """
-        Read TCP/IP parameters in config file and connect to the device. 
-        """
+        """Read TCP/IP parameters in config file and connect to the device. """
         # The IP and PORT parameters are stored in the config file.
         try:
             self._ip = self.conf.get('VideoSensor', 'IP')
             self._port = int(self.conf.get('VideoSensor', 'PORT'))
         except NoSectionError:
-            try:
-                rospy.logerr('Missing config file: {}'.format(self.filename))
-            except:
-                pass
+            logger.error('Missing config file: {}'.format(self.filename))
             return
-        try:
-            rospy.logdebug('Opened configuration file. '
-                           'Connecting to {}'.format(self._ip))
-        except:
-            pass
+        logger.debug('Opened configuration file. '
+                     'Connecting to {}'.format(self._ip))
         try:
             self._client.open_connection(self._ip, self._port)
             self._connected = True
         except socket.timeout:
-            try:
-                rospy.logwarn('Unable to connect to port. Timeout')
-            except:
-                pass
+            logger.warn('Unable to connect to port. Timeout')
 
     def disconnect_client(self):
         """Close TCP/IP connection with the device.
@@ -185,18 +178,14 @@ class VideoSensor(object):
         be able to be reopened.
         """
         if not self._connected:
-            try:
-                rospy.logwarn('Cannot disconnect, as it was not connected.')
-            except:
-                pass
+            logger.warn('Cannot disconnect, as it was not connected.')
             return
         self.set_register('SYSTEM_OUTPUT', 0)
         self._client.close_connection()
         self._connected = False
 
     def load_configuration(self, write2fpga=True):
-        """
-        Load the config file and send the configuration to the FPGA.
+        """Load the config file and send the configuration to the FPGA.
 
         * Read camera and sensor parameters in self.filename. They are 
           then stored in the self._params variable. 
@@ -206,10 +195,7 @@ class VideoSensor(object):
         """
         # Check that the filename is correct
         if not self.conf.sections():
-            try:
-                rospy.logerr('Missing config file: {}'.format(self.filename))
-            except:
-                pass
+            logger.error('Missing config file: {}'.format(self.filename))
             return
         # Sensor color thresholds parameters
         self._params['red_thresholds'] = ast.literal_eval(
@@ -236,10 +222,7 @@ class VideoSensor(object):
         self.get_limits_array()
         # If the flag is marked as False, the method stops here.
         if not write2fpga:
-            try:
-                rospy.logdebug("Loaded parameters. FPGA wasn't configured")
-            except:
-                pass
+            logger.debug("Loaded parameters. FPGA wasn't configured")
             return
         # --------------------------------------------------------------#
         # Write to the FPGA registers the loaded configuration.
@@ -264,28 +247,22 @@ class VideoSensor(object):
         self.set_register('SYSTEM_OUTPUT', self._params['output'])
         # Send the configuration command to the FPGA
         conf = self._client.write_command('CONFIGURE_CAMERA', True)
-        try:
-            rospy.logdebug(repr("Obtained '{}' "
-                                "after 'CONFIGURE_CAMERA'".format(conf)))
-        except:
-            pass
+        logger.debug(repr("Obtained '{}' "
+                          "after 'CONFIGURE_CAMERA'".format(conf)))
 
     def read_conffile(self, filename):
-        """
-        Look for a configuration file on the given path and read it.
-        """
+        """Look for a configuration file on the given path and read it."""
         self.filename = filename
         self.conf.read(self.filename)
         return
 
     def get_homography_array(self):
-        """
-        Get an homography array from the configuration file.
-        """
+        """Get an homography array from the configuration file."""
         try:
             # Read the value of H as is written on file.
             raw_H = self.conf.get('Misc', 'H')
         except NoSectionError:
+            logger.error("There is no 'H' section in the conf file")
             raise AttributeError("There is no 'H' section in the conf file")
         # Format the value in order to get a 3x3 array.
         tuple_format = ','.join(raw_H.split('\n'))
@@ -294,14 +271,14 @@ class VideoSensor(object):
         return self._H
 
     def get_limits_array(self):
-        """
-        Get the limits array from the configuration file.
-        """
+        """Get the limits array from the configuration file."""
         try:
             # Read the value of H as is written on file.
             raw_L = self.conf.get('Misc', 'limits')
         except NoSectionError:
-            raise AttributeError("There is no 'H' section in the conf file")
+            logger.error("There is no 'limits' section in the conf file")
+            raise AttributeError(
+                    "There is no 'limits' section in the conf file")
         # Format the value in order to get a 3x3 array.
         tuple_format = ','.join(raw_L.split('\n'))
         array_format = ast.literal_eval(tuple_format)
@@ -309,8 +286,7 @@ class VideoSensor(object):
         return self._limits
 
     def get_offsets(self):
-        """
-        Get the offset of the sensor respect to the iSpace center.
+        """Get the offset of the sensor respect to the iSpace center.
 
         The row offset of the camera images corresponds to the images
         height and the column offset corresponds to the images width.
@@ -351,8 +327,7 @@ class VideoSensor(object):
         return value
 
     def set_register(self, register, value):
-        """
-        Write a value into an FPGA register.
+        """Write a value into an FPGA register.
 
         :param str register: key identifier of valid register name of 
          the FPGA. The full list of valid keys and their associated name
@@ -384,16 +359,10 @@ class VideoSensor(object):
             for item in value[1:]:
                 formatted_value = "{},{}".format(formatted_value, item)
         else:
-            try:
-                rospy.logwarn("Not valid value type for {}".format(value))
-            except:
-                pass
+            logger.warn("Not valid value type for {}".format(value))
         message = self._client.write_register(register, formatted_value)
-        try:
-            rospy.logdebug(repr("Obtained '{}' after writing {} on {} register."
-                                "".format(message, formatted_value, register)))
-        except:
-            pass
+        logger.debug("Obtained '{}' after writing {} on {} register.".format(
+                message, formatted_value, register))
         return message
 
     def configure_tracker(self, tracker_id, min_x, min_y, width, height):
@@ -414,16 +383,12 @@ class VideoSensor(object):
         to the FPGA are integers. Other types like float are not valid
         and the FPGA will not recognize them.
         """
-        try:
-            rospy.logdebug('Configuring tracker {}'.format(tracker_id))
-        except:
-            pass
-        self.set_register('SET_WINDOW', '{},{},{},{},{}'
-                                        ''.format(tracker_id, min_x, min_y, width, height))
+        logger.debug('Configuring tracker {}'.format(tracker_id))
+        self.set_register('SET_WINDOW', '{},{},{},{},{}'.format(
+                tracker_id, min_x, min_y, width, height))
 
     def capture_frame(self, gray=True, tries=20, output_file=''):
-        """
-        This method requests a frame to the FPGA.
+        """This method requests a frame to the FPGA.
 
         :param bool get_gray: if true, a gray-scale image will be 
          requested. If false, the requested image will be RGB.
@@ -443,10 +408,7 @@ class VideoSensor(object):
         message = self._client.write_command('GET_NEW_FRAME', True)
         while message != "Image captured.\n":
             if not tries:
-                try:
-                    rospy.logwarn("Stop waiting for a frame after 20 tries")
-                except:
-                    pass
+                logger.warn("Stop waiting for a frame after 20 tries")
                 sys.exit()
             tries -= 1
             # Timeout error means that the FPGA buffer is empty. If this
@@ -455,10 +417,7 @@ class VideoSensor(object):
                 message = self._client.recv(self._client.buffer_size)
             except socket.timeout:
                 pass
-        try:
-            rospy.logdebug(repr("'{}' after {} tries.".format(message, 20 - tries)))
-        except:
-            pass
+        logger.debug(repr("'{}' after {} tries.".format(message, 20 - tries)))
         # Set dim (dimensions) to the number of components per pixel.
         if gray:
             command = 'GET_GRAY_IMAGE'
@@ -469,10 +428,7 @@ class VideoSensor(object):
             dim = 3
             shape = (self._params['height'], self._params['width'], dim)
         self._client.write_command(command)
-        try:
-            rospy.logdebug("'{}' command sent.".format(command))
-        except:
-            pass
+        logger.debug("'{}' command sent.".format(command))
         # SIZE = Width x Height x Dimensions
         img_size = self._params['width'] * self._params['height'] * dim
         data = self._client.read_data(img_size)

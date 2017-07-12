@@ -1,6 +1,5 @@
 #!/usr/bin/env python
-"""
-Multithreading routine for controlling external FPGAs with cameras.
+"""Multithreading routine for controlling external FPGAs with cameras.
 
 The module creates several parallel threads, in order to optimize the
 execution time, as it contains several instructions which require
@@ -21,22 +20,32 @@ instead, it will probably corrupt the TCP/IP socket and the FPGAs will
 have to be reset.
 """
 # Standard libraries
-import glob
 import copy
-import numpy as np
+import glob
+import logging
+import os
+import sys
 import threading
 import time
-# ROS libraries
-from geometry_msgs.msg import Pose2D
-import rospy
+# Third party libraries
+import numpy as np
+import zmq
 # Local libraries
 from resources import dataprocessing
 import videosensor
 
+try:
+    # Logging setup.
+    import settings
+except ImportError:
+    # Exit program if the settings module can't be found.
+    sys.exit("Can't find settings module. Maybe environment variables are not"
+             "set. Run the environment .sh script at the project root folder.")
+logger = logging.getLogger('sensor')
+
 
 class CameraThread(threading.Thread):
-    """
-    Child class of threading.Thread for capturing frames from a camera.
+    """Child class of threading.Thread for capturing frames from a camera.
 
     The *run* method, where is specified the behavior when the *start*
     method is called, is overridden. At first, it loads the FPGA
@@ -160,7 +169,7 @@ class CameraThread(threading.Thread):
             # Free the ROI tracker if corresponding flag was raised
             if self._reset_flag['1']:
                 self.camera.set_register('FREE_TRACKER', '1')
-                rospy.loginfo('{} TRACKER FREED'.format(self.name))
+                logger.info('{} TRACKER FREED'.format(self.name))
                 self._reset_flag = {'1': False}
                 self._triangles.pop('1', None)
             # Sync operations. Write to global variables.
@@ -173,13 +182,12 @@ class CameraThread(threading.Thread):
             # Sleep the rest of the cycle
             while (time.time() - cycle_start_time < self.cycletime):
                 pass
-        rospy.logdebug('shutting down {}'.format(self.name))
+        logger.debug('shutting down {}'.format(self.name))
         self.camera.disconnect_client()
 
 
 class DataFusionThread(threading.Thread):
-    """
-    Child class of threading.Thread for merging and processing data.
+    """Child class of threading.Thread for merging and processing data.
 
     The *run* method, where is specified the behavior when the *start*
     method is called, is overridden. At first, it waits until all cameras
@@ -192,8 +200,7 @@ class DataFusionThread(threading.Thread):
       the creating of a new ROI tracker in the second camera.
     - Evaluate if an UGV exits a camera, deleting the ROI tracker if
       it is True.
-    - Merge the information obtained in all the cameras and write it in
-      a ROS topic
+    - Merge the information obtained in all the cameras.
 
     :param triangles: READ ONLY List containing N dictionaries, where
      N is the number of Camera threads. Each dictionary element is the
@@ -217,9 +224,6 @@ class DataFusionThread(threading.Thread):
     :param end_event: *threading.Event* object that is set to True when
      the *UserThread* detects an 'end' order from the user.
 
-    :param publisher: *rospy.Publisher* object for sending pose values to
-     a ROS topic, that can be read by other ROS nodes.
-
     :param reset_flags: List containing N dictionaries whose entries are
      flags set to True when a ROI tracker in specified FPGA to be reset.
 
@@ -228,14 +232,31 @@ class DataFusionThread(threading.Thread):
 
     def __init__(self, triangles, ntriangles, conditions, inborders,
                  quadrant_limits, begin_events, end_event, reset_flags,
-                 publisher, name='Fusion Thread'):
+                 name='Fusion Thread'):
         """
         Class constructor method
         """
         threading.Thread.__init__(self, name=name)
-        self.publisher = publisher
         self.cycletime = 0.02
         self.quadrant_limits = quadrant_limits
+        self.step = 0
+        # Publishing socket instantiation.
+        pose_publisher = zmq.Context.instance().socket(zmq.PUB)
+        pose_publisher.bind("tcp://*:{}".format(
+                int(os.environ.get("UVISPACE_BASE_PORT_POSITION")) + 1))
+        # Open a subscribe socket and poller to listen for speed set points.
+        speed_subscriber = zmq.Context.instance().socket(zmq.SUB)
+        speed_subscriber.setsockopt_string(zmq.SUBSCRIBE, u"")
+        speed_subscriber.setsockopt(zmq.CONFLATE, True)
+        speed_subscriber.connect("tcp://localhost:{}".format(
+                int(os.environ.get("UVISPACE_BASE_PORT_SPEED")) + 1))
+        # Store sockets in dictionary
+        self.poller = zmq.Poller()
+        self.poller.register(speed_subscriber, zmq.POLLIN)
+        self.sockets = {
+            'pose_publisher': pose_publisher,
+            'speed_subscriber': speed_subscriber,
+        }
         # Synchronization variables
         self.conditions = conditions
         self.begin_events = begin_events
@@ -252,6 +273,8 @@ class DataFusionThread(threading.Thread):
         self._reset_flags = copy.copy(self.reset_flags)
         # Array to save historic poses values. Initial values set to 0.
         self.data_hist = np.array([0, 0, 0, 0]).astype(np.float64)
+        # Variable containing the initial reference time.
+        self.initial_time = 0
         # Boolean to save data in spreadsheet and file text.
         self.save2file = True
 
@@ -260,6 +283,8 @@ class DataFusionThread(threading.Thread):
         # Wait until all cameras are initialized
         for event in self.begin_events:
             event.wait()
+        # Set the reference time at this point.
+        self.initial_time = time.time()
         triangle = []
         while not self.end_event.isSet():
             # Start the cycle timer
@@ -302,22 +327,21 @@ class DataFusionThread(threading.Thread):
                             self.quadrant_limits[index2])
                     # Update triangles[index2] if there is not any tracker
                     # initialized and UGV is within borders of the Camera.
-                    if (self._inborders[index2]['1'] and not
-                    self._triangles[index2]):
+                    if (self._inborders[index2]['1']
+                          and not self._triangles[index2]):
                         self._ntriangles[index2]['1'] = copy.copy(triangle)
                         self._reset_flags[index2]['1'] = False
-                        rospy.loginfo("New triangle in Camera{}".format(
-                                index2))
+                        logger.info("New triangle in Camera{}".format(index2))
                     # If the UGV is not in borders, but a tracker is set and is
                     # returning None values, it has to be reset.
-                    elif (not self._inborders[index2]['1'] and
-                                  self._triangles[index2].get('1', False) is None):
+                    elif (not self._inborders[index2]['1']
+                          and self._triangles[index2].get('1', False) is None):
                         self._reset_flags[index2]['1'] = True
                         self._ntriangles[index2].pop('1', None)
                     # If the UGV is not in borders and any tracker was detected,
                     # the reset flag has to be cleared.
-                    elif (not self._inborders[index2]['1'] and
-                                  self._triangles[index2].get('1', False) is False):
+                    elif (not self._inborders[index2]['1']
+                          and self._triangles[index2].get('1', False) is False):
                         self._reset_flags[index2]['1'] = False
                         self._ntriangles[index2].pop('1', None)
                     # Sync operations. Write to global variables
@@ -327,16 +351,21 @@ class DataFusionThread(threading.Thread):
                     self.reset_flags[index2].update(self._reset_flags[index2])
                     self.conditions[index2].release()
             # TODO merge the content of every dictionary in triangle
-
+            # Increment the iterations counter.
+            self.step += 1
             # Scan for detected triangle and publish it.
             for element in self._triangles:
-                if element.has_key('1'):
+                if '1' in element:
                     if element['1'] is not None:
                         triangle = copy.copy(element['1'])
             if triangle:
                 pose = triangle.get_pose()
                 # Convert coordinates to meters.
-                mpose = [pose[0] / 1000, pose[1] / 1000, pose[2]]
+                mpose = [np.asscalar(pose[0]) / 1000,
+                         np.asscalar(pose[1]) / 1000,
+                         np.asscalar(pose[2])]
+                # Time since first triangle.
+                diff_time = time.time() - self.initial_time
                 # Time in milliseconds.
                 diff_time = diff_time * 1000
                 # Temporary array to save time and pose in meters.
@@ -344,30 +373,46 @@ class DataFusionThread(threading.Thread):
                                        pose[2]]).astype(np.float64)
                 # Matrix of floats to save data.
                 self.data_hist = np.vstack((self.data_hist, new_data))
-                rospy.logdebug("detected triangle at {}mm and {} radians."
+                logger.info("Detected triangle at {}mm and {} radians."
                                "".format(pose[0:2], pose[2]))
-               ## Predict actual position (kalman)
-               # get input with zmq
-               # self.kalman.predict(input, delta_t)
-               ## Update position (kalman)
-               # self.kalman.update(mpose)
-                self.publisher.publish(Pose2D(mpose[0], mpose[1], mpose[2]))
-            rospy.loginfo("Triangles at: {}".format(self._triangles))
-            #            rospy.loginfo("Borders: {}".format(self._inborders))
+                # TODO Update Kalman filter and obtain filtered pose.
+                ## Predict actual position (kalman)
+                # get input with zmq
+                # self.kalman.predict(input, delta_t)
+                ## Update position (kalman)
+                # self.kalman.update(mpose)
+                pose_msg = {'x': mpose[0], 'y': mpose[1], 'theta': mpose[2],
+                            'step': self.step}
+                self.sockets['pose_publisher'].send_json(pose_msg)
+            logger.debug("Triangles at: {}".format(self._triangles))
+            # Allow to poll only during the remaining cycletime.
+            polling_time = self.cycletime - (time.time()-cycle_start_time)
+            events = dict(self.poller.poll(polling_time))
+            if (self.sockets['speed_subscriber'] in events
+                    and events[self.sockets['speed_subscriber']] == zmq.POLLIN):
+                speeds = self.sockets['speed_subscriber'].recv_json()
+                logger.debug("Received new speed set point: {}".format(speeds))
+            else:
+                # Set speeds to None in order to ignore Kalman prediction step.
+                speeds = None
+                logger.debug("Not received any speed set point from controller")
             # Sleep the rest of the cycle
             while (time.time() - cycle_start_time < self.cycletime):
                 pass
-        # Instructions to execute after end_event is raised.
         if self.save2file:
-            # Delete first row data (row of zeros).
-            self.data_hist = self.data_hist[1:self.data_hist.shape[0], :]
-            # Save historic data containing poses and times.
-            dataprocessing.process_data(self.data_hist, save_analyzed=True,
-                                        save2master=True)
+        # Delete first row data (row of zeros).
+        self.data_hist = self.data_hist[1:self.data_hist.shape[0], :]
+        # Save historic data containing poses and times.
+        dataprocessing.process_data(self.data_hist, save_analyzed=True,
+                                save2master=True)
+        # Cleanup resources
+        for socket in self.sockets:
+            self.sockets[socket].close()
+        return
+
 
 class UserThread(threading.Thread):
-    """
-    Child class of threading.Thread for interacting with user.
+    """Child class of threading.Thread for interacting with user.
 
     The *run* method, where is specified the behavior when the *start*
     method is called, is overridden. Ask the user for commands through
@@ -393,7 +438,7 @@ class UserThread(threading.Thread):
         # Wait until all camera threads start.
         for event in self.begin_events:
             event.wait()
-        rospy.loginfo("All cameras were initialized")
+        logger.info("All cameras were initialized")
         while not self.end_event.isSet():
             # Start the cycle timer
             cycle_start_time = time.time()
@@ -406,15 +451,12 @@ class UserThread(threading.Thread):
 
 
 def main():
-    """
-    Main routine for multiplecamera.py
+    """Main routine for multiplecamera.py
 
     Read configuration files, initialize variables and set up threads.
     :return:
     """
-    rospy.init_node('uvisensor')
-    publisher = rospy.Publisher('/robot_1/pose2d', Pose2D, queue_size=1)
-    rospy.loginfo("BEGINNING MAIN EXECUTION")
+    logger.info("BEGINNING MAIN EXECUTION")
     # Get the relative path to all the config files stored in /config folder.
     conf_files = glob.glob("./resources/config/*.cfg")
     conf_files.sort()
@@ -450,7 +492,7 @@ def main():
     # Thread for merging the data obtained at every CameraThread.
     threads.append(DataFusionThread(triangles, ntriangles, conditions,
                                     inborders, quadrant_limits, begin_events,
-                                    end_event, reset_flags, publisher))
+                                    end_event, reset_flags))
     # Thread for getting user input.
     threads.append(UserThread(begin_events, end_event))
     # start threads

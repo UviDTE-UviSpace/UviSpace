@@ -4,15 +4,11 @@
 # Backup gedit files.
 **~
 
-##tmp folder
-#Log files
-**/tmp/*.log
-#Subfolders
-**/tmp/**/**
-#eps files (graphs)
-**/tmp/*.eps
-#tar files
-**/tmp/*.tar
+# Log files
+**.log
+
+##tmp folders
+**/tmp/**
 
 # Setuptools distribution folder.
 /dist/
@@ -29,3 +25,26 @@
 
 #doc auxiliary files
 /docs/_build/
+
+#Quartus II files
+/DE1-SoC/FPGA_Design/.qsys_edit/**
+/DE1-SoC/FPGA_Design/soc_system/**
+/DE1-SoC/FPGA_Design/hps_isw_handoff/**
+/DE1-SoC/FPGA_Design/db/**
+/DE1-SoC/**/*.bak
+/DE1-SoC/FPGA_Design/incremental_db/**
+/DE1-SoC/FPGA_Design/**/*.txt
+/DE1-SoC/FPGA_Design/**/*.rpt
+/DE1-SoC/FPGA_Design/**/*.csv
+/DE1-SoC/FPGA_Design/**/*.done
+/DE1-SoC/FPGA_Design/**/*.smsg
+/DE1-SoC/FPGA_Design/**/*.summary
+/DE1-SoC/FPGA_Design/**/*.pin
+/DE1-SoC/FPGA_Design/**/*.jdi
+/DE1-SoC/FPGA_Design/**/*.sopcinfo
+/DE1-SoC/FPGA_Design/**/*.sld
+/DE1-SoC/FPGA_Design/**/*.qws
+/DE1-SoC/FPGA_Design/**/*.sof
+/DE1-SoC/FPGA_Design/**/*.rbf
+/DE1-SoC/FPGA_Design/**/*.cdf
+/DE1-SoC/FPGA_Design/**/*.stp

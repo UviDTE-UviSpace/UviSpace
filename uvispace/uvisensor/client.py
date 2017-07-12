@@ -1,6 +1,5 @@
 #!/usr/bin/env python
-"""
-This module contains the Client class, which inherits from socket.socket
+"""This module contains the Client class, which inherits from socket.socket
 
 * socket.socket class source code can be found in the following link:
   https://hg.python.org/cpython/file/2.7/Lib/socket.py
@@ -12,14 +11,19 @@ This module contains the Client class, which inherits from socket.socket
 # Standard libraries
 import ast
 import errno
+import logging
 import socket
 from socket import socket as Socket
+import sys
 
-# ROS libraries
 try:
-    import rospy
-except:
-    pass
+    # Logging setup.
+    import settings
+except ImportError:
+    # Exit program if the settings module can't be found.
+    sys.exit("Can't find settings module. Maybe environment variables are not"
+             "set. Run the environment .sh script at the project root folder.")
+logger = logging.getLogger("sensor")
 
 
 class Client(Socket):
@@ -94,24 +98,16 @@ class Client(Socket):
         self.settimeout(timeout)
 
     def close_connection(self):
-        """
-        Send 'CLOSE_CONNECTION' command to FPGA and close TCP/IP socket.
-        """
+        """Send 'CLOSE_CONNECTION' command to FPGA and close TCP/IP socket."""
         # Check parent class _sock variable,
         # as it changes its class when it is closed.
         # WARNING: not valid method for Python3.
         if not isinstance(self._sock, socket._closedsocket):
             self.write_command('CLOSE_CONNECTION')
             self.close()
-            try:
-                rospy.loginfo('Closed the TCP client\n\n{}'.format(75 * '-'))
-            except:
-                pass
+            logger.info('Closed the TCP client {}'.format(75 * '-'))
         else:
-            try:
-                rospy.logdebug('Unable to close TCP client. Already closed')
-            except:
-                pass
+            logger.debug('Unable to close TCP client. Already closed')
 
     def open_connection(self, ip, port):
         """Create a TCP/IP socket connection.
@@ -126,11 +122,8 @@ class Client(Socket):
         self.ip = ip
         self.port = port
         self.connect((self.ip, self.port))
-        try:
-            rospy.loginfo('Started TCP client with IP: {} '
-                          'and PORT:{}.'.format(self.ip, self.port))
-        except:
-            pass
+        logger.info('Started TCP client with IP: {} and PORT:{}.'.format(
+                self.ip, self.port))
         # Empty the data buffer, as it contains the 'welcome message'.
         self.recv(self.buffer_size)
 
@@ -145,31 +138,24 @@ class Client(Socket):
         bytes = 0
         packages = []
         # Do not stop reading new packages until target 'size' is reached.
-        while (bytes < size):
+        while bytes < size:
             try:
                 received_package = self.recv(self.buffer_size)
             except socket.timeout:
                 amount = 100 * float(bytes) / size
-                try:
-                    rospy.logwarn('Stopped data acquisition with {:.2f}% '
-                                  'of the data acquired'.format(amount))
-                except:
-                    pass
+                logger.warn('Stopped data acquisition with {:.2f}% '
+                            'of the data acquired'.format(amount))
                 break
             bytes += len(received_package)
             packages.append(received_package)
-        try:
-            rospy.logdebug('Received {} bytes of {} ({:.2f}%)\r'.format(
-                    bytes, size, (100 * float(bytes) / size)))
-        except:
-            pass
+        logger.debug('Received {} bytes of {} ({:.2f}%)'.format(
+                bytes, size, (100 * float(bytes) / size)))
         # Concatenate all the packages in a unique variable
         data = ''.join(packages)
         return data
 
     def write_command(self, command, clean_buffer=False):
-        """
-        Send a command to the TCP/IP client.
+        """Send a command to the TCP/IP client.
         
         :param str command: FPGA command to be executed.
         :param bool clean_buffer: if True, a clean-up reading of the 

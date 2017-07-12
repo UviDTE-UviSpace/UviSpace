@@ -3,11 +3,11 @@ UviSpace
 ========
 
 :Author:
-    Javier López Randulfe,
+    Department of Electronic Technology,
 
     University of Vigo
 
-:Version: 1.0.0-alpha 
+:Version: 1.0.0
 
 The project contains two main packages:
 
@@ -15,35 +15,36 @@ The project contains two main packages:
 
 * uvisensor
 
+=====================
+Project documentation
+=====================
+
+.. image:: https://readthedocs.org/projects/uvispace/badge/?version=latest
+   :target: http://uvispace.readthedocs.io/en/latest/?badge=latest
+   :alt: Documentation Status
+
+The oficial documentation about the UviSpace project is hosted at
+.. _this website: http://uvispace.readthedocs.io/en/latest/
+
 ========
 uvirobot
 ========
 
-The uvirobot package contains all the modules required to control an UGV i.e.: Connect to it via an XBee module, receive position and goal parameters, calculate the path to the goal, stablish speed set points, transform the speed value to a valid input to the Arduino board on the UGV and send the values to it.
-
-Before executing any of its modules, roscore has to be run on a Terminal (Ctrl + Alt + T):
-
-.. code-block:: bash
-
-   $ source /<rosdistro_path>/setup.bash
-   $ roscore
-
-**NOTE:** roscore is a program that belongs to the ROS package. For more info on how to install and use it, visit their webpage (http://www.ros.org/)
-
-
+The uvirobot package contains all the modules required to control an UGV i.e.: Connect to it via an XBee module, receive position and goal parameters, calculate the path to the goal, establish speed set points, transform the speed value to a valid input to the Arduino board on the UGV and send the values to it.
 
 
 messenger
 ---------
 
-The *messenger* module stablish a connection with the board. It has been tested with XBee modules, connected to the PC through a serial port. Once the connection is established, the program will wait for speed set points and will send them to the UGV.
+The *messenger* module establish a connection with the board. It has been tested with XBee modules, connected to the PC through a serial port. Once the connection is established, the program will wait for speed set points and will send them to the UGV.
    
-* To run it, open a new Terminal and execute the script using the Python interpreter. The execution will spin until it is killed. It will hear to speed set points published to the topic *'/robot_X/cmd_vel'*:
+* To run it, open a new Terminal, set up the environment, and execute the script using the Python interpreter. The execution will listen for speed set points until it is killed:
 
 .. code-block:: bash
 
    $ cd /<path_to_UviSpace>/uvispace/
-   $ python  -m uvirobot/messenger.py -r <robot_id>
+   $ source set_environment.sh
+   $ python -m uvirobot/messenger.py -r <robot_id>
 
 * Alternatively, execute the *messenger.py* module on an *IPython* session:
 
@@ -51,68 +52,52 @@ The *messenger* module stablish a connection with the board. It has been tested 
 
    In [1]: cd /<path_to_UviSpace>/uvispace/
           /<path_to_UviSpace>/uvispace
-   In [2]: run  -m uvirobot.messenger -- -r <robot_id>
+   In [2]: run -m uvirobot.messenger -- -r <robot_id>
 
 
-* On another Terminal, publish speed set points (Not necessary if move_robot.py is going to be executed): 
-
-.. code-block:: bash
-
-    $ rostopic pub robot_1/cmd_vel geometry_msgs/Twist '{linear: {x: 1, y: 0, z: 0}, angular: {z: 0.0} }'
-
-
-move_robot
+controller
 ----------
 
-The *move_robot* module listens to the publishing of new positions (poses) of the robot, as well as to destination goals typed by the user.
+The *controller* module listens for new positions of the robot, as well as for destination goals typed by the user.
 
-* To run it, open a new Terminal and execute the script using the Python interpreter. The execution will spin until it is killed. 
+* To run it, open a new Terminal, set up the environment, and execute the script using the Python interpreter. The execution will keep running until it is killed.
 
 .. code-block:: bash
 
    $ cd /<path_to_UviSpace>/uvispace/
-   $ python  -m uvirobot/move_robot.py -r <robot_id>
+   $ source set_environment.sh
+   $ python -m uvirobot/move_robot.py -r <robot_id>
 
-* Alternatively, execute the module on an *IPython* session:
+* Alternatively, execute the *controller.py* module on an *IPython* session:
 
 .. code-block:: python
 
    In [1]: cd /<path_to_UviSpace>/uvispace/
           /<path_to_UviSpace>/uvispace
-   In [2]: run  -m uvirobot.move_robot -- -r <robot_id>
-
-
-* On another Terminal, publish UGV positions (Not necessary if ispace_sensor package is going to be executed): 
-
-.. code-block:: bash
-
-    $ rostopic pub /robot_1/pose2d geometry_msgs/Pose2D "{x: 0.0, y: 0.0, theta: 0.0}"
-
-* On another Terminal, publish a destination goal
-
-.. code-block:: bash
-
-    $ rostopic pub /robot_1/goal geometry_msgs/Pose2D "{x: 1.0, y: 0.0}"
+   In [2]: run -m uvirobot.move_robot -- -r <robot_id>
 
 
 =========
 uvisensor
 =========
 
-The uvisensor package connects via ethernet to external cameras, configures them and acquires images of the iSpace scene. Finally, it calculates the position of the UGVs and publishes them to a rostopic.
+The uvisensor package connects via ethernet to external cameras, configures them and acquires images of the iSpace scene so it can calculate the position of the UGVs.
 
-ispace_sensor
--------------
+multiplecamera
+--------------
 
-* To run it, open a new Terminal and execute the script using the ROS utilities. The execution will spin until it is killed. 
+* To run it, open a new Terminal, set up the environment, and execute the script using the Python interpreter.
 
 .. code-block:: bash
 
-    $ source /<path-to-catkin-ws>/devel/setup.bash
-    $ roslaunch ispace_robot robots.launch --screen
+   $ cd /<path_to_UviSpace>/uvispace/
+   $ source set_environment.sh
+   $ python -m uvirobot/multiplecamera.py
 
+* Alternatively, execute the *multiplecamera.py* module on an *IPython* session:
 
+.. code-block:: python
 
-
-
-
+   In [1]: cd /<path_to_UviSpace>/uvispace/
+          /<path_to_UviSpace>/uvispace
+   In [2]: run -m uvisensor.multiplecamera

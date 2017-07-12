@@ -1,6 +1,5 @@
 #!/usr/bin/env python
-"""
-This module contains the Image class, for image processing operations.
+"""This module contains the Image class, for image processing operations.
 
 The operations implemented in the class methods are focused to the 
 images obtained from the external FPGAs in the UviSpace project. Thus, 
@@ -32,16 +31,24 @@ to an external device, the image representation mentioned above is
 the typical used system.
 """
 # Standard libraries
+import logging
+import sys
+# Third party libraries
 import cv2
 import numpy as np
 import skimage.measure
 import skimage.morphology
-
-# ROS libraries
-import rospy
-
 # Local libraries
 import geometry
+
+try:
+    # Logging setup.
+    import settings
+except ImportError:
+    # Exit program if the settings module can't be found.
+    sys.exit("Can't find settings module. Maybe environment variables are not"
+             "set. Run the environment .sh script at the project root folder.")
+logger = logging.getLogger("sensor")
 
 
 class Image(object):
@@ -93,8 +100,8 @@ class Image(object):
         # Why is it necessary to divide by 4??
         thr_min = int(red_c[0], 2) / 4
         thr_max = int(red_c[1], 2) / 4
-        rospy.logdebug("Thresholding between {} and {}".format(thr_min,
-                                                               thr_max))
+        logger.debug("Thresholding between {} and {}"
+                     .format(thr_min, thr_max))
         # The first binary approach is obtained evaluating 2 thresholds
         raw_binarized = cv2.inRange(self.image, thr_min, thr_max)
         # A simple erosion gets rid of the whole noise. Dilating the eroded
@@ -112,12 +119,11 @@ class Image(object):
         background = np.argmax(label_count)
         self._binarized = filtered
         self._binarized[labels != background] = 255
-        rospy.logdebug("Image binarization finished")
+        logger.debug("Image binarization finished")
         return self._binarized
 
     def correct_distortion(self, kx=0.035, ky=0.035, only_contours=True):
-        """
-        Correct barrel distortion on contours or on the whole image.
+        """Correct barrel distortion on contours or on the whole image.
         
         The distortion is corrected using a 2nd polynomial equation for
         every pixel with coordinates :math:`(X_d, Y_d)`. The resulting 
@@ -137,13 +143,13 @@ class Image(object):
         :param bool only_contours: Specify if the correction is to be 
          applied to the whole image or only to the contours.
         """
-        # Calculate the image center as the middle point of the width and height.
+        # Calculate the image center as the middle point of the width and height
         center = np.array(self.image.shape) / 2
         # If contours is an empty list, algorithm is not outperformed.
         if only_contours and self.contours:
             for index, cnt in enumerate(self.contours):
                 distance = cnt - center
-                # Calculate the r distance. First numerator and then denominator.
+                # Calculate the r distance. First numerator and then denominator
                 r = (distance ** 2).sum(axis=1).astype(np.float)
                 r /= (center ** 2).sum() * 2
                 coeffs = np.array([r*ky, r*kx]).transpose() + 1
@@ -153,8 +159,7 @@ class Image(object):
             pass
 
     def get_shapes(self, tolerance=8, get_contours=True):
-        """
-        Get the shapes' vertices in the binarized image.
+        """Get the shapes' vertices in the binarized image.
 
         Update the *self.triangles* attribute.
 
@@ -179,7 +184,7 @@ class Image(object):
          coordinates of the M vertices of the shape.
         :rtype: list
         """
-        rospy.logdebug("Getting the shapes' vertices in the image")
+        logger.debug("Getting the shapes' vertices in the image")
         # Obtain a list with all the contours in the image, separating each
         # shape in a different element of the list
         if get_contours:
@@ -192,12 +197,13 @@ class Image(object):
             # Sometimes, the initial vertex is repeatead at the end.
             # Thus, if len is 3 and vertex is NOT repeated, it is a triangle
             if len(coords) == 3 and (not np.array_equal(coords[0], coords[-1])):
-                triangle = geometry.Triangle(np.clip(coords, [0, 0], max_coords))
+                triangle = geometry.Triangle(
+                        np.clip(coords, [0,0], max_coords))
                 self.triangles.append(triangle)
             # If len is 4 and vertex IS repeated, it is a triangle
             if len(coords) == 4 and np.array_equal(coords[0], coords[-1]):
                 triangle = geometry.Triangle(np.clip(coords[1:],
-                                                     [0, 0], max_coords))
+                                                     [0,0], max_coords))
                 self.triangles.append(triangle)
-            rospy.logdebug("A {}-vertices shape was found".format(len(coords)))
+            logger.debug("A {}-vertices shape was found".format(len(coords)))
         return self.triangles
