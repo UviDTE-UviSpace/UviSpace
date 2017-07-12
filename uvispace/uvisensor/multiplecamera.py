@@ -28,6 +28,7 @@ import sys
 import threading
 import time
 # Third party libraries
+import matplotlib.pyplot as plt
 import numpy as np
 import zmq
 # Local libraries
@@ -374,18 +375,20 @@ class DataFusionThread(threading.Thread):
                 # Multiply the difference time by the number of steps that were
                 # missed. This should be reflected as well in the noise.
                 delta_t *= (1 + self.step - speeds['step'])
-                self.kalman.predict(inputs, delta_t)
                 self.kalman.set_prediction_noise((3.5**2, 3.5**2, 0.015**2))
             else:
+                inputs = np.array([0, 0])
+                delta_t = 0.02
                 self.kalman.set_prediction_noise((1000**2, 1000**2, 2*np.pi**2))
+            prediction, _ = self.kalman.predict(inputs, delta_t)
             # Increment the iterations counter.
             self.step += 1
             # Update the measured pose only if a triangle was detected.
             if detected_triangle:
                 pose = triangle.get_pose()
                 # Convert coordinates to meters.
-                mpose = [np.asscalar(pose[0]) / 1000,
-                         np.asscalar(pose[1]) / 1000,
+                mpose = [np.asscalar(pose[0]),
+                         np.asscalar(pose[1]),
                          np.asscalar(pose[2])]
                 logger.info("Detected triangle at {}mm and {} radians."
                                "".format(pose[0:2], pose[2]))
@@ -396,9 +399,11 @@ class DataFusionThread(threading.Thread):
             else:
                 camera_noise = (1000**2, 1000**2, 2*np.pi**2)
             self.kalman.set_measurement_noise(camera_noise)
-            new_state = self.kalman.update(pose)
-            pose_msg = {'x': mpose[0], 'y': mpose[1], 'theta': mpose[2],
-                        'step': self.step}
+            pose_array =  np.array(pose).reshape(3,1)
+            new_state, _ = self.kalman.update(pose_array)
+            pose_list = new_state.reshape(3).tolist()
+            pose_msg = {'x': pose_list[0], 'y': pose_list[1],
+                        'theta': pose_list[2], 'step': self.step}
             self.sockets['pose_publisher'].send_json(pose_msg)
             publish_time = time.time()
             logger.debug("Triangles at: {}".format(self._triangles))
