@@ -85,8 +85,8 @@ class Kalman(object):
         self.B = np.array([[np.cos(self.states[2]), 0], 
                            [np.sin(self.states[2]), 0],
                            [0, 1]])
-        # Actual and predicted states covariance matrices.
-        self._P = np.eye(var_dim) * np.array([100**2, 100**2, (5*np.pi/180)**2])
+        # Actual and predicted states covariance matrices. Initially very high.
+        self._P = np.eye(var_dim) * np.array([1000**2, 1000**2, 2*np.pi**2])
         self._pred_P = np.zeros([var_dim, var_dim])
         # State and Measurement noise covariance matrix.
         self._Q = np.eye(var_dim) * np.array([100**2, 100**2, (5*np.pi/180)**2])
@@ -106,6 +106,14 @@ class Kalman(object):
 
         Note that the input dimensions must coincide with the dimensions
         of the system state variables.
+
+        NOTE: A more more accurate model would calculate the process
+        (prediction) noise depending on the magnitude of the input
+        variables. According to the propagation of errors theory, the
+        error of a multiplication is bigger when each of the products is
+        bigger i.e. in this case, the predicted position error is bigger
+        when the speeds are bigger (also when the time difference is
+        bigger).
 
         :param noise: new values for the process noise.
         :type noise: 'var_dim' length list or tuple; or a
