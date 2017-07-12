@@ -30,7 +30,7 @@ import time
 from geometry_msgs.msg import Pose2D
 import rospy
 # Local libraries
-from resources import saveposes
+from resources import dataprocessing
 import videosensor
 
 
@@ -252,8 +252,7 @@ class DataFusionThread(threading.Thread):
         self._reset_flags = copy.copy(self.reset_flags)
         # Array to save historic poses values. Initial values set to 0.
         self.data_hist = np.array([0, 0, 0, 0]).astype(np.float64)
-        # Variable containing the initial reference time.
-        self.initial_time = 0
+        # Boolean to save data in spreadsheet and file text.
         self.save2file = True
 
     def run(self):
@@ -261,8 +260,6 @@ class DataFusionThread(threading.Thread):
         # Wait until all cameras are initialized
         for event in self.begin_events:
             event.wait()
-        # Set the reference time at this point.
-        self.initial_time = time.time()
         triangle = []
         while not self.end_event.isSet():
             # Start the cycle timer
@@ -340,7 +337,6 @@ class DataFusionThread(threading.Thread):
                 pose = triangle.get_pose()
                 # Convert coordinates to meters.
                 mpose = [pose[0] / 1000, pose[1] / 1000, pose[2]]
-                diff_time = time.time() - self.initial_time
                 # Time in milliseconds.
                 diff_time = diff_time * 1000
                 # Temporary array to save time and pose in meters.
@@ -363,12 +359,11 @@ class DataFusionThread(threading.Thread):
                 pass
         # Instructions to execute after end_event is raised.
         if self.save2file:
+            # Delete first row data (row of zeros).
+            self.data_hist = self.data_hist[1:self.data_hist.shape[0], :]
             # Save historic data containing poses and times.
-            saveposes.save_data(self.data_hist, analyze=True)
-
-    #### #Delete first row data (row of zeros).
-    # if work_data[0, 4]==np.array([0, 0, 0, 0]).astype(np.float64):
-    #     work_data = work_data[1:data.shape[0], :]
+            dataprocessing.process_data(self.data_hist, save_analyzed=True,
+                                        save2master=True)
 
 class UserThread(threading.Thread):
     """
