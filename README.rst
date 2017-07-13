@@ -25,6 +25,7 @@ Project documentation
 
 The oficial documentation about the UviSpace project is hosted at `this website
 <http://uvispace.readthedocs.io/en/latest/>`_.
+
 ========
 uvirobot
 ========
