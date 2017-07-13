@@ -61,9 +61,9 @@ def get_image(camera, filename=''):
     return image
 
 
-def set_tracker(camera, image=[]):
+def set_tracker(camera, image=None):
     """Configure trackers according to detected triangles.
-    
+
     Parameters
     ----------
     camera : VideoSensor() object
@@ -71,37 +71,40 @@ def set_tracker(camera, image=[]):
         frame will be obtained, and whose trackers register will be
         configured.
 
-    triangles : iterable
-        This variable contains a Triangle object from which the ROI 
-        tracker will be initialized. If it is empty, a new image is 
-        captured and obtained the triangles from it.
-    
+    image : imgprocessing.Image() object
+        Optional parameter representing an already captured image. If
+        the parameter is not present, an image will be captured from
+        the camera.
+
+
     Returns
     -------
+    tracker_image : imgprocessing.Image() object
+        Frame captured and obtained from the FPGA.
+
     tracker_position : 5-elements list
-        Contains the information about the configured tracker. The first
-        element is the tracker id, the 2nd and 3rd are the X,Y initial
-        coordinates and the 4th and 5th are the width and height.
-        
-    image : imgprocessing.Image() object
-        frame captured and obtained from the FPGA.
+        Contains the information about the configured tracker. The
+        first element is the tracker id, the 2nd and 3rd are the X,Y
+        initial coordinates and the 4th and 5th are the width and
+        height.
+
     """
-    # Get an Image object with triangle shapes in it already segregated.
-    if not image:
-        image = get_image(camera)
-        triangles = image.triangles
-    tracker = {}
+    if image is None:
+        # Get an Image object with triangle shapes in it already segregated.
+        tracker_image = get_image(camera)
+    else:
+        tracker_image = image
     tracker_position = []
-    for index, triangle in enumerate(image.triangles):
+    for index, triangle in enumerate(tracker_image.triangles):
         triangle.get_pose()
-        triangle.get_window(min_value=0, max_value=image.image.shape)
-        min_x = int(camera._scale * triangle.window[0,1])
-        min_y = int(camera._scale * triangle.window[0,0])
-        width = int(camera._scale * triangle.window[1,1] - min_x)
-        height = int(camera._scale * triangle.window[1,0] - min_y)
+        triangle.get_window(min_value=0, max_value=tracker_image.image.shape)
+        min_x = int(camera._scale * triangle.window[0, 1])
+        min_y = int(camera._scale * triangle.window[0, 0])
+        width = int(camera._scale * triangle.window[1, 1] - min_x)
+        height = int(camera._scale * triangle.window[1, 0] - min_y)
         camera.configure_tracker(index + 1, min_x, min_y, width, height)
         tracker_position = [index + 1, min_x, min_y, width, height]
-    return image, tracker_position
+    return tracker_image, tracker_position
 
 
 class VideoSensor(object):
@@ -160,7 +163,7 @@ class VideoSensor(object):
         try:
             self._ip = self.conf.get('VideoSensor', 'IP')
             self._port = int(self.conf.get('VideoSensor', 'PORT'))
-        except NoSectionError:
+        except ConfigParser.NoSectionError:
             logger.error('Missing config file: {}'.format(self.filename))
             return
         logger.debug('Opened configuration file. '
@@ -261,7 +264,7 @@ class VideoSensor(object):
         try:
             # Read the value of H as is written on file.
             raw_H = self.conf.get('Misc', 'H')
-        except NoSectionError:
+        except ConfigParser.NoSectionError:
             logger.error("There is no 'H' section in the conf file")
             raise AttributeError("There is no 'H' section in the conf file")
         # Format the value in order to get a 3x3 array.
@@ -275,7 +278,7 @@ class VideoSensor(object):
         try:
             # Read the value of H as is written on file.
             raw_L = self.conf.get('Misc', 'limits')
-        except NoSectionError:
+        except ConfigParser.NoSectionError:
             logger.error("There is no 'limits' section in the conf file")
             raise AttributeError(
                     "There is no 'limits' section in the conf file")
@@ -390,7 +393,7 @@ class VideoSensor(object):
     def capture_frame(self, gray=True, tries=20, output_file=''):
         """This method requests a frame to the FPGA.
 
-        :param bool get_gray: if true, a gray-scale image will be 
+        :param bool gray: if true, a gray-scale image will be
          requested. If false, the requested image will be RGB.
         :param int tries: number of times that the system will try to 
          obtain the requested image. After the last try, the system will

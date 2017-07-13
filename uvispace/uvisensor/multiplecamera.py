@@ -181,7 +181,7 @@ class CameraThread(threading.Thread):
                 self.triangles.clear()
             self.condition.release()
             # Sleep the rest of the cycle
-            while (time.time() - cycle_start_time < self.cycletime):
+            while (time.time() - cycle_start_time) < self.cycletime:
                 pass
         logger.debug('shutting down {}'.format(self.name))
         self.camera.disconnect_client()
@@ -289,8 +289,6 @@ class DataFusionThread(threading.Thread):
         while not self.end_event.isSet():
             # Start the cycle timer
             cycle_start_time = time.time()
-            # Boolean for updating the Kalman measurement noise.
-            detected_triangle = False
             # Loop with N iterations, being N the number of camera threads.
             for index, condition in enumerate(self.conditions):
                 # Threads synchronized instructions.
@@ -330,7 +328,7 @@ class DataFusionThread(threading.Thread):
                     # Update triangles[index2] if there is not any tracker
                     # initialized and UGV is within borders of the Camera.
                     if (self._inborders[index2]['1']
-                          and not self._triangles[index2]):
+                            and not self._triangles[index2]):
                         self._ntriangles[index2]['1'] = copy.copy(triangle)
                         self._reset_flags[index2]['1'] = False
                         logger.info("New triangle in Camera{}".format(index2))
@@ -358,6 +356,7 @@ class DataFusionThread(threading.Thread):
                 delta_t = time.time() - publish_time
             else:
                 delta_t = 0
+            # Boolean for updating the Kalman measurement noise.
             detected_triangle = False
             # Scan for detected triangle and process it.
             for element in self._triangles:
@@ -386,12 +385,8 @@ class DataFusionThread(threading.Thread):
             # Update the measured pose only if a triangle was detected.
             if detected_triangle:
                 pose = triangle.get_pose()
-                # Convert coordinates to meters.
-                mpose = [np.asscalar(pose[0]),
-                         np.asscalar(pose[1]),
-                         np.asscalar(pose[2])]
                 logger.info("Detected triangle at {}mm and {} radians."
-                               "".format(pose[0:2], pose[2]))
+                            "".format(pose[0:2], pose[2]))
                 # Set the measurement noise to the cameras error, calculated
                 # empirically.
                 camera_noise = (50**2, 50**2, (2*np.pi/180)**2)
@@ -399,7 +394,7 @@ class DataFusionThread(threading.Thread):
             else:
                 camera_noise = (1000**2, 1000**2, 2*np.pi**2)
             self.kalman.set_measurement_noise(camera_noise)
-            pose_array =  np.array(pose).reshape(3,1)
+            pose_array = np.array(pose).reshape(3,1)
             new_state, _ = self.kalman.update(pose_array)
             pose_list = new_state.reshape(3).tolist()
             pose_msg = {'x': pose_list[0], 'y': pose_list[1],
@@ -421,7 +416,7 @@ class DataFusionThread(threading.Thread):
                 speeds = None
                 logger.debug("Not received any speed set point from controller")
             # Sleep the rest of the cycle.
-            while (time.time() - cycle_start_time < self.cycletime):
+            while (time.time() - cycle_start_time) < self.cycletime:
                 pass
         # Clean up resources
         for socket in self.sockets:
@@ -464,7 +459,7 @@ class UserThread(threading.Thread):
             if i in ('q', 'Q'):
                 self.end_event.set()
             # Sleep the rest of the cycle
-            while (time.time() - cycle_start_time < self.cycletime):
+            while (time.time() - cycle_start_time) < self.cycletime:
                 pass
 
 
@@ -493,14 +488,14 @@ def main():
     begin_events = []
     end_event = threading.Event()
     # New thread instantiation for each configuration file.
-    for index, fname in enumerate(conf_files):
+    for index, filename in enumerate(conf_files):
         conditions.append(threading.Condition())
         begin_events.append(threading.Event())
         threads.append(CameraThread(triangles[index], ntriangles[index],
                                     begin_events[index], end_event,
                                     conditions[index], inborders[index],
                                     reset_flags[index],
-                                    'Camera{}'.format(index), fname))
+                                    'Camera{}'.format(index), filename))
     # List containing the points defining the space limits of each camera.
     quadrant_limits = []
     for camera_thread in threads:
