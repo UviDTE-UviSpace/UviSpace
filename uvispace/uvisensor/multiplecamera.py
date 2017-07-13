@@ -400,11 +400,11 @@ class DataFusionThread(threading.Thread):
             while (time.time() - cycle_start_time < self.cycletime):
                 pass
         if self.save2file:
-        # Delete first row data (row of zeros).
-        self.data_hist = self.data_hist[1:self.data_hist.shape[0], :]
-        # Save historic data containing poses and times.
-        dataprocessing.process_data(self.data_hist, save_analyzed=True,
-                                save2master=True)
+            # Delete first row data (row of zeros).
+            self.data_hist = self.data_hist[1:self.data_hist.shape[0], :]
+            # Save historic data containing poses and times.
+            dataprocessing.process_data(self.data_hist, save_analyzed=True,
+                                    save2master=True)
         # Cleanup resources
         for socket in self.sockets:
             self.sockets[socket].close()
@@ -460,7 +460,7 @@ def main():
     # Get the relative path to all the config files stored in /config folder.
     conf_files = glob.glob("./resources/config/*.cfg")
     conf_files.sort()
-    # Reduce the list to only one camera, for testing purposes.
+    #TODO Reduce the list to only one camera, for testing purposes. Delete
     conf_files = [conf_files[0]]
     threads = []
     # A Condition object for each camera thread execution.

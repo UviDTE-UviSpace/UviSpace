@@ -188,7 +188,7 @@ def write_spreadsheet(header, data_to_save, experiment_name, exp_conditions,
         for col in range(5, cols+1):
             letter_range = openpyxl.utils.get_column_letter(col)
             start_range = '{}{}'.format(letter_range, 7)
-            end_range = '{}{}'.format(letter_range, rows+5)
+            end_range = '{}{}'.format(letter_range, rows+6)
             interval = '{}:{}'.format(start_range,end_range)
             ws.cell(column=col, row=rows+7,
                     value= '=SUM({})\n'.format(interval))
@@ -208,9 +208,9 @@ def write_spreadsheet(header, data_to_save, experiment_name, exp_conditions,
         # Dynamic average speeds.
         ws.cell(column=11, row=rows+11, value= '=1000*SQRT(((B{rows}-B7)^2)+'
                 '(((C{rows}-C7)^2)))/E{rows2}\n'
-                ''.format(rows=rows+5, rows2=rows+7))
+                ''.format(rows=rows+6, rows2=rows+7))
         ws.cell(column=11, row=rows+12, value= '=1000*(D{rows}-D7)/'
-                                'E{rows2}\n'.format(rows=rows+5, rows2=rows+7))
+                'E{rows2}\n'.format(rows=rows+6, rows2=rows+7))
     wb.save(name_spreadsheet)
     return name_spreadsheet
 
@@ -226,12 +226,12 @@ def save2master_xlsx(experiment_name, sp_left, sp_right, avg_lin_spd,
     :param float64 avg_ang_spd: average angular speed of UGV.
     """
     # Data search to save in masterspreadsheet.
-    proyect_folder = '\'file:///home/joselamasvarela/UviSpace/'
-    master_folder = 'uvispace/uvisensor/resources/datatemp/'
+    proyect_folder = '\'file:///home/joslamasvarela/UviSpace/'
+    master_folder = 'uvispace/uvisensor/datatemp/'
     spreadsheet_ext= '.xlsx'
     name_sheet = '\'#$Sheet.'
     try:
-        wb = openpyxl.load_workbook('datatemp/{}.xlsx').format(experiment_name)
+        wb = openpyxl.load_workbook('datatemp/{}.xlsx'.format(experiment_name))
     except:
         wb = openpyxl.Workbook()
     ws = wb.active

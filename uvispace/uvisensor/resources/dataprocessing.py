@@ -82,12 +82,12 @@ class DataAnalyzer(object):
         # Work_data is the data matrix to be manipulated in this function.
         work_data = np.copy(self._raw_data)
         # Initialization data arrays.
-        last_data = np.array([0, 0, 0, 0]).astype(np.float64)
-        filtered_data = np.array([0, 0, 0, 0]).astype(np.float64)
+        last_data = (np.array([0, 0, 0, 0]).astype(np.float64)).reshape(1,4)
+        filtered_data = (np.array([0, 0, 0, 0]).astype(np.float64)).reshape(1,4)
         for row in range(work_data.shape[0]):
             # New dara read array.
-            new_data = np.copy(work_data[row, :])
-            different_values = np.any(new_data[1:4] != last_data[1:4])
+            new_data = (np.copy(work_data[row, :])).reshape(1,4)
+            different_values = np.any(new_data[:, 1:4] != last_data[: ,1:4])
             if different_values:
                 last_data = np.copy(new_data)
                 if row == 0:
@@ -95,7 +95,9 @@ class DataAnalyzer(object):
                     filtered_data = np.copy(new_data)
                 else:
                     filtered_data = np.vstack([filtered_data, new_data])
-        self._raw_data = np.copy(filtered_data)
+        # Unnecesary update raw_data if only have one data.
+        if work_data.shape[0] > 1:
+            self._raw_data = np.copy(filtered_data)
         return filtered_data
 
     def remove_stop_poses(self):
@@ -110,7 +112,8 @@ class DataAnalyzer(object):
         # Work_data is the data matrix to be manipulated in this function.
         work_data = np.copy(self._raw_data)
         rows = work_data.shape[0]
-        # Initialization first and last rows witout poses with stopped UGV.
+        # Initialization first and last rows witout poses with stopped UGV,
+        # before and after movement.
         row_upper = 0
         row_lower = rows
         # Initial repeated data calculation. We work with the first 20 data
@@ -131,8 +134,15 @@ class DataAnalyzer(object):
         # If there are not final values of stopped UGV is not updated.
         if indexes.shape[0] > 0:
             row_lower = indexes.min() + 1
-        # UGV data in motion.
-        clipped_data = work_data[row_upper:row_lower, :]
+        # UGV data in movement.
+        # The next case happen if the UGV is stopped always. Small errors in the
+        # data taken, imply that the lower row is above the upper row.
+        if row_upper>row_lower:
+            clipped_data = work_data[0,:]
+            clipped_data = clipped_data.reshape(1, clipped_data.shape[0])
+        # Normal movement.
+        else:
+            clipped_data = work_data[row_upper:row_lower, :]
         self._raw_data = np.copy(clipped_data)
         return clipped_data
 
@@ -157,45 +167,53 @@ class DataAnalyzer(object):
         # Work_data is the data matrix to be manipulated in this function.
         work_data = np.copy(self._raw_data)
         rows = work_data.shape[0]
-        # First sample, time zero.
-        work_data[:, 0] -= work_data[0, 0]
-        # Differential data matrix: current sample minus previous sample in
-        # data.
-        diff_data = np.zeros_like(work_data)
-        diff_data[1:rows, :] = work_data[1:rows, :] - work_data[0:(rows-1), :]
-        # Vector differential length displaced.
-        diff_length = np.sqrt(diff_data[:, 1]**2 + diff_data[:, 2]**2)
-        # The direction is negative when the angular speed and vehicle angle
-        # difference is bigger than pi/2 (90 degrees).
-        speed_angles = np.arctan2(diff_data[:, 2], diff_data[:, 1])
-        # Sign of the speed of the UGV with respect to itself.
-        sign_spd = np.ones([(rows), 1])
-        sign_spd[np.abs(work_data[:, 3] - speed_angles) > (np.pi/2)] *= -1
-        # Vector differential length displaced.
-        diff_speed = np.zeros(rows)
-        diff_speed[1:rows] = (sign_spd[1:, 0] * 1000 * diff_length[1:]
-                              /diff_data[1:, 0])
-        # Vector differential angular speed.
-        diff_angl_speed = np.zeros(rows)
-        diff_angl_speed[1:rows] = (1000 * diff_data[1:rows, 3]
-                                   / diff_data[1:rows, 0])
-        # Complete differential data matrix with new data.
-        diff_data = np.insert(diff_data, 4, diff_length, axis=1)
-        diff_data = np.insert(diff_data, 5, diff_speed, axis=1)
-        diff_data = np.insert(diff_data, 6, diff_angl_speed, axis=1)
-        # Complete work data matrix with differential_data.
-        work_data = np.hstack([work_data, diff_data])
-        # Calculate of average speed and average angular speed.
-        sum_data = diff_data.sum(axis=0)
-        length_displaced = np.sqrt(((work_data[rows-1,1] - work_data [0, 1])**2)
-                           + ((work_data[rows-1,2] - work_data [0, 2])**2))
-        avg_lin_spd = np.round((1000*length_displaced/sum_data[0]), 2)
-        avg_ang_spd = np.round(((1000*(work_data[rows-1, 3]
-                                   - work_data [0, 3]))/sum_data[0]), 2)
-        formatted_data = np.round(work_data, 2)
-        self._analyzed_data = np.copy(formatted_data)
-        self._avg_lin_spd = avg_lin_spd
-        self._avg_ang_spd = avg_ang_spd
+        # # Unnecesary manipulate raw_data if only have one data.
+        if rows > 1:
+            # First sample, time zero.
+            work_data[:, 0] -= work_data[0, 0]
+            # Differential data matrix: current sample minus previous sample in
+            # data.
+            diff_data = np.zeros_like(work_data)
+            diff_data[1:rows, :] = work_data[1:rows, :] - work_data[0:(rows-1), :]
+            # Vector differential length displaced.
+            diff_length = np.sqrt(diff_data[:, 1]**2 + diff_data[:, 2]**2)
+            # The direction is negative when the angular speed and vehicle angle
+            # difference is bigger than pi/2 (90 degrees).
+            speed_angles = np.arctan2(diff_data[:, 2], diff_data[:, 1])
+            # Sign of the speed of the UGV with respect to itself.
+            sign_spd = np.ones([(rows), 1])
+            sign_spd[np.abs(work_data[:, 3] - speed_angles) > (np.pi/2)] *= -1
+            # Vector differential length displaced.
+            diff_speed = np.zeros(rows)
+            diff_speed[1:rows] = (sign_spd[1:, 0] * 1000 * diff_length[1:]
+                                  /diff_data[1:, 0])
+            # Vector differential angular speed.
+            diff_angl_speed = np.zeros(rows)
+            diff_angl_speed[1:rows] = (1000 * diff_data[1:rows, 3]
+                                       / diff_data[1:rows, 0])
+            # Complete differential data matrix with new data.
+            diff_data = np.insert(diff_data, 4, diff_length, axis=1)
+            diff_data = np.insert(diff_data, 5, diff_speed, axis=1)
+            diff_data = np.insert(diff_data, 6, diff_angl_speed, axis=1)
+            # Complete work data matrix with differential_data.
+            work_data = np.hstack([work_data, diff_data])
+            # Calculate of average speed and average angular speed.
+            sum_data = diff_data.sum(axis=0)
+            length_displaced = np.sqrt(((work_data[(rows-1),1] - work_data [0, 1])**2)
+                               + ((work_data[(rows-1),2] - work_data [0, 2])**2))
+            avg_lin_spd = np.round((1000*length_displaced/sum_data[0]), 2)
+            avg_ang_spd = np.round(((1000*(work_data[(rows-1), 3]
+                                       - work_data [0, 3]))/sum_data[0]), 2)
+            formatted_data = np.round(work_data, 2)
+            self._analyzed_data = np.copy(formatted_data)
+            self._avg_lin_spd = avg_lin_spd
+            self._avg_ang_spd = avg_ang_spd
+        # If only have one data.
+        else:
+            self._analyzed_data[:, :4] = self._raw_data
+            formatted_data = 0
+            avg_lin_spd = 0
+            avg_ang_spd = 0
         return (formatted_data, avg_lin_spd, avg_ang_spd)
 
     def save2data(self, save_analyzed=False, save2master=False):
