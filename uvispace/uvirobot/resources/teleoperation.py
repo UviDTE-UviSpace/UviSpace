@@ -2,7 +2,7 @@
 """
 Auxiliary program for controlling the UGV movements through keyboard.
 
-The module makes a reading of the keyboard, and from the movement
+The module makes a reading of the keyboard, and sends the movement
 chosen by the user.
 
 For the correct operation of the module, it is necessary that the

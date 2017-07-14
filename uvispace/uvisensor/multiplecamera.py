@@ -234,7 +234,7 @@ class DataFusionThread(threading.Thread):
 
     def __init__(self, triangles, ntriangles, conditions, inborders,
                  quadrant_limits, begin_events, end_event, reset_flags,
-                 name='Fusion Thread'):
+                 name='Fusion Thread', save2file=False):
         """
         Class constructor method
         """
@@ -274,16 +274,16 @@ class DataFusionThread(threading.Thread):
         self._inborders = copy.copy(self.inborders)
         self._reset_flags = copy.copy(self.reset_flags)
         # Array to save historic poses values. Initial values set to 0.
-        self.data_hist = np.array([0, 0, 0, 0]).astype(np.float64)
+        self.data_hist = np.array([0., 0., 0., 0.]).reshape(1,4)
         # Variable containing the initial reference time.
         self.initial_time = 0
-        # Boolean to save data in spreadsheet and file text.
-        self.save2file = True
         # Kalman filter instance with 3 variables (x, y, theta)
         # and 2 inputs (linear and angular speeds).
         self.kalman = kalmanfilter.Kalman(var_dim=3, input_dim=2)
         # Set the process noise, calculated empirically. units = (mm, mm, rad)^2
         self.kalman.set_prediction_noise((3.5**2, 3.5**2, 0.015**2))
+        # Boolean to save data in spreadsheet and file text.
+        self.save2file = save2file
 
     def run(self):
         """Main routine of the DataFusionThread."""
@@ -404,13 +404,11 @@ class DataFusionThread(threading.Thread):
             else:
                 camera_noise = (1000**2, 1000**2, 2*np.pi**2)
             self.kalman.set_measurement_noise(camera_noise)
-            # Time since first triangle.
-            diff_time = time.time() - self.initial_time
-            # Time in milliseconds.
-            diff_time = diff_time * 1000
+            # Time since first triangle, in milliseconds.
+            diff_time = (time.time()-self.initial_time) * 1000
             # Temporary array to save time and pose in meters.
             new_data = np.array([diff_time, pose[0], pose[1],
-                                   pose[2]]).astype(np.float64)
+                                 pose[2]]).astype(np.float64)
             # Matrix of floats to save data.
             self.data_hist = np.vstack((self.data_hist, new_data))
             pose_array = np.array(pose).reshape(3,1)
@@ -439,10 +437,10 @@ class DataFusionThread(threading.Thread):
                 pass
         if self.save2file:
             # Delete first row data (row of zeros).
-            self.data_hist = self.data_hist[1:self.data_hist.shape[0], :]
+            self.data_hist = self.data_hist[1:, :]
             # Save historic data containing poses and times.
             dataprocessing.process_data(self.data_hist, save_analyzed=True,
-                                    save2master=True)
+                                        save2master=True)
         # Cleanup resources
         for socket in self.sockets:
             self.sockets[socket].close()
@@ -498,8 +496,6 @@ def main():
     # Get the relative path to all the config files stored in /config folder.
     conf_files = glob.glob("./resources/config/*.cfg")
     conf_files.sort()
-    #TODO Reduce the list to only one camera, for testing purposes. Delete
-    conf_files = [conf_files[0]]
     threads = []
     # A Condition object for each camera thread execution.
     conditions = []
