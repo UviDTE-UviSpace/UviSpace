@@ -50,9 +50,16 @@ def camera_startup(filename):
 
 
 def get_image(camera, filename=''):
-    """Get an image. Input is an instance of VideoSensor class
-    
-    it can be saved to a local file (optional).
+    """Capture a frame with the specified camera and process it.
+
+    If a filename is specified, the captured frame will be saved on the
+    specified path.
+
+    :param camera: 
+    :type camera: VideoSensor() object
+    :param str filename: path to the file where the captured frame will
+     be stored (optional).
+    :return: The image from the captured frame after processing it.
     """
     screenshot = camera.capture_frame(gray=True, output_file=filename)
     image = imgprocessing.Image(screenshot)
@@ -64,30 +71,21 @@ def get_image(camera, filename=''):
 def set_tracker(camera, image=None):
     """Configure trackers according to detected triangles.
 
-    Parameters
-    ----------
-    camera : VideoSensor() object
-        Instance of the VideoSensor() class, from whom the initial
-        frame will be obtained, and whose trackers register will be
-        configured.
+    :param camera: Instance of the VideoSensor() class, from whom the 
+     initial frame will be obtained, and whose trackers register will be
+     configured.
+    :type camera: VideoSensor() object
 
-    image : imgprocessing.Image() object
-        Optional parameter representing an already captured image. If
-        the parameter is not present, an image will be captured from
-        the camera.
+    :param image: Optional parameter representing an already captured
+     image. If the parameter is not present, an image will be captured
+     from the camera.
+    :type image: imgprocessing.Image() object
 
-
-    Returns
-    -------
-    tracker_image : imgprocessing.Image() object
-        Frame captured and obtained from the FPGA.
-
-    tracker_position : 5-elements list
-        Contains the information about the configured tracker. The
-        first element is the tracker id, the 2nd and 3rd are the X,Y
-        initial coordinates and the 4th and 5th are the width and
-        height.
-
+    :return: A frame captured and obtained from the FPGA; and a list
+     with the information about the configured tracker whose first
+     element is the tracker id, the 2nd and 3rd are the X,Y initial
+     coordinates and the 4th and 5th are the width and height.
+    :rtype: imgprocessing.Image() object, 5-elements list
     """
     if image is None:
         # Get an Image object with triangle shapes in it already segregated.
