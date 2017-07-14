@@ -35,11 +35,11 @@ logger = logging.getLogger('controller')
 def make_a_rectangle(my_robot):
     """Set the robot path to a rectangle of fixed vertices."""
     logger.info("Creating rectangle path")
-    point_a = {'x': 1.0, 'y': 1.0}
-    point_b = {'x': -1.0, 'y': 1.0}
-    point_c = {'x': -1.0, 'y': -1.0}
-    point_d = {'x': 1.0, 'y': -1.0}
-    point_e = {'x': 1.0, 'y': 0.0}
+    point_a = {'x': 1000, 'y': 1000}
+    point_b = {'x': -1000, 'y': 1000}
+    point_c = {'x': -1000, 'y': -1000}
+    point_d = {'x': 1000, 'y': -1000}
+    point_e = {'x': 1000, 'y': 0}
     my_robot.new_goal(point_a)
     my_robot.new_goal(point_b)
     my_robot.new_goal(point_c)

@@ -9,7 +9,7 @@ import numpy as np
 try:
     import uvisensor.kalmanfilter as kalmanfilter
 except ImportError:
-    # Exit program if the settings module can't be found.
+    # Exit program if the uvisensor package can't be found.
     sys.exit("Can't find uvisensor package. Maybe environment variables are not"
              "set. Run the environment .sh script at the project root folder.")
 

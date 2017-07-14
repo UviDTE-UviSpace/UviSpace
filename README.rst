@@ -23,8 +23,8 @@ Project documentation
    :target: http://uvispace.readthedocs.io/en/latest/?badge=latest
    :alt: Documentation Status
 
-The oficial documentation about the UviSpace project is hosted at
-.. _this website: http://uvispace.readthedocs.io/en/latest/
+The oficial documentation about the UviSpace project is hosted at `this website
+<http://uvispace.readthedocs.io/en/latest/>`_.
 
 ========
 uvirobot
