@@ -45,7 +45,7 @@ class DataAnalyzer(object):
         self._sp_left = 0
         self._sp_right = 0
 
-    def load_data(self, data):
+    def set_data(self, data):
         """Update raw_data matrix with time and poses.
 
         :param data: Matrix of floats64 with M data.
@@ -56,8 +56,8 @@ class DataAnalyzer(object):
         self._raw_data = np.copy(data)
         return data
 
-    def load_setpoints_save(self, sp_left, sp_right):
-        """Update sp_left and sp_right with the new setpoints values.
+    def set_setpoints(self, sp_left, sp_right):
+        """Update sp_left and sp_right with new setpoints values.
 
         :param int sp_left: left speed setpoint.
         :param int sp_right: right speed setpoint.
@@ -69,34 +69,30 @@ class DataAnalyzer(object):
         return (sp_left, sp_right)
 
     def remove_repeated_poses(self):
-        """Remove repeated pose values for the raw_data matrix.
+        """Remove repeated pose values from the raw_data matrix.
 
         When the camera does not detect a triangle, the pose value is
-        not updated, remaining the current pose as the previous pose.
-        With this method, these values are eliminated.
+        not updated. With this method, these values are eliminated.
 
         :return: data without repeated values.
         :rtype: numpy.array float64 (shape=Mx4).
         """
-        # New data is correct when at least one value of pose are different.
-        # Work_data is the data matrix to be manipulated in this function.
-        work_data = np.copy(self._raw_data)
         # Initialization data arrays.
-        last_data = (np.array([0, 0, 0, 0]).astype(np.float64)).reshape(1,4)
-        filtered_data = (np.array([0, 0, 0, 0]).astype(np.float64)).reshape(1,4)
-        for row in range(work_data.shape[0]):
+        last_data = np.zeros((1,4)).astype(np.float64)
+        filtered_data = np.zeros((1,4)).astype(np.float64)
+        # TODO substitute the for loop by numpy methods.
+        for row in range(self._raw_data.shape[0]):
             # New dara read array.
-            new_data = (np.copy(work_data[row, :])).reshape(1,4)
-            different_values = np.any(new_data[:, 1:4] != last_data[: ,1:4])
-            if different_values:
-                last_data = np.copy(new_data)
+            if np.any(self._raw_data[row, 1:4] != last_data[:, 1:4]):
+                last_data = np.copy(self._raw_data[row]).reshape(1,4)
                 if row == 0:
                     # Initialization filtered_data array.
-                    filtered_data = np.copy(new_data)
+                    filtered_data = np.copy(self._raw_data[row]).reshape(1,4)
                 else:
-                    filtered_data = np.vstack([filtered_data, new_data])
+                    filtered_data = np.vstack([filtered_data, 
+                                               self._raw_data[row]])
         # Unnecesary update raw_data if only have one data.
-        if work_data.shape[0] > 1:
+        if self._raw_data.shape[0] > 1:
             self._raw_data = np.copy(filtered_data)
         return filtered_data
 
@@ -106,43 +102,43 @@ class DataAnalyzer(object):
         This method eliminates the initial and final values in which the
         UGV is stopped.
 
+        NOTE: This method implies that on a normal execution there will
+        be more than 20 captured poses.
+
         :return: data without stop values.
         :rtype: numpy.array float64 (shape=Mx4).
         """
-        # Work_data is the data matrix to be manipulated in this function.
-        work_data = np.copy(self._raw_data)
-        rows = work_data.shape[0]
+        rows = self._raw_data.shape[0]
         # Initialization first and last rows witout poses with stopped UGV,
         # before and after movement.
-        row_upper = 0
-        row_lower = rows
-        # Initial repeated data calculation. We work with the first 20 data
+        row_upper_index = 0
+        row_lower_index = rows
+        # Initial repeated data calculation. We work with the first 20 data,
         # assuming that the array will have more than 20 data (data collected
         # for at least 4 seconds).
-        mode_upper = stats.mode(work_data[0:20, 1:3])[0]
-        mode_rows = np.all(work_data[:, 1:3]==mode_upper, axis=1)
-        indexes = np.where(mode_rows)[0]
+        upper_mode = stats.mode(self._raw_data[0:20, 1:3])[0]
+        mode_rows = np.all(self._raw_data[:, 1:3]==upper_mode, axis=1)
+        mode_indexes = np.where(self._raw_data)[0]
         # If there are not initial values of stopped UGV is not updated.
-        if indexes.shape[0] > 0:
-            row_upper = indexes.max()
+        if mode_indexes.shape[0] > 0:
+            row_upper_index = mode_indexes.max()
         # Final repeated data calculation. We work with the first 20 data
         # assuming that the array will have more than 20 data (data collected
         # for at least 4 seconds).
-        mode_lower = stats.mode(work_data[(rows-20):rows, 1:3])[0]
-        mode_rows = np.all(work_data[:, 1:3]==mode_lower, axis=1)
-        indexes = np.where(mode_rows)[0]
+        lower_mode = stats.mode(self._raw_data[(rows-20):rows, 1:3])[0]
+        mode_rows = np.all(self._raw_data[:, 1:3]==lower_mode, axis=1)
+        mode_indexes = np.where(self._raw_data)[0]
         # If there are not final values of stopped UGV is not updated.
-        if indexes.shape[0] > 0:
-            row_lower = indexes.min() + 1
+        if mode_indexes.shape[0] > 0:
+            row_lower_index = mode_indexes.min() + 1
         # UGV data in movement.
         # The next case happen if the UGV is stopped always. Small errors in the
         # data taken, imply that the lower row is above the upper row.
-        if row_upper>row_lower:
-            clipped_data = work_data[0,:]
-            clipped_data = clipped_data.reshape(1, clipped_data.shape[0])
+        if row_upper_index > row_lower_index:
+            clipped_data = self._raw_data[0,:].reshape(1, clipped_data.shape[0])
         # Normal movement.
         else:
-            clipped_data = work_data[row_upper:row_lower, :]
+            clipped_data = self._raw_data[row_upper_index:row_lower_index, :]
         self._raw_data = np.copy(clipped_data)
         return clipped_data
 
@@ -174,7 +170,7 @@ class DataAnalyzer(object):
             # Differential data matrix: current sample minus previous sample in
             # data.
             diff_data = np.zeros_like(work_data)
-            diff_data[1:rows, :] = work_data[1:rows, :] - work_data[0:(rows-1), :]
+            diff_data[1:] = work_data[1:] - work_data[0:-1]
             # Vector differential length displaced.
             diff_length = np.sqrt(diff_data[:, 1]**2 + diff_data[:, 2]**2)
             # The direction is negative when the angular speed and vehicle angle
@@ -185,12 +181,11 @@ class DataAnalyzer(object):
             sign_spd[np.abs(work_data[:, 3] - speed_angles) > (np.pi/2)] *= -1
             # Vector differential length displaced.
             diff_speed = np.zeros(rows)
-            diff_speed[1:rows] = (sign_spd[1:, 0] * 1000 * diff_length[1:]
-                                  /diff_data[1:, 0])
+            diff_speed[1:] = (sign_spd[1:, 0] * 1000 * diff_length[1:]
+                              / diff_data[1:, 0])
             # Vector differential angular speed.
             diff_angl_speed = np.zeros(rows)
-            diff_angl_speed[1:rows] = (1000 * diff_data[1:rows, 3]
-                                       / diff_data[1:rows, 0])
+            diff_angl_speed[1:] = 1000 * diff_data[1:, 3] / diff_data[1:, 0]
             # Complete differential data matrix with new data.
             diff_data = np.insert(diff_data, 4, diff_length, axis=1)
             diff_data = np.insert(diff_data, 5, diff_speed, axis=1)
@@ -199,11 +194,11 @@ class DataAnalyzer(object):
             work_data = np.hstack([work_data, diff_data])
             # Calculate of average speed and average angular speed.
             sum_data = diff_data.sum(axis=0)
-            length_displaced = np.sqrt(((work_data[(rows-1),1] - work_data [0, 1])**2)
-                               + ((work_data[(rows-1),2] - work_data [0, 2])**2))
-            avg_lin_spd = np.round((1000*length_displaced/sum_data[0]), 2)
-            avg_ang_spd = np.round(((1000*(work_data[(rows-1), 3]
-                                       - work_data [0, 3]))/sum_data[0]), 2)
+            total_length = np.sqrt((work_data[-1, 1] - work_data [0, 1])**2
+                                    + (work_data[-1, 2] - work_data [0, 2])**2)
+            avg_lin_spd = np.round((1000*total_length/sum_data[0]), 2)
+            avg_ang_spd = np.round((1000*(work_data[-1, 3]
+                                    - work_data [0, 3]))/sum_data[0], 2)
             formatted_data = np.round(work_data, 2)
             self._analyzed_data = np.copy(formatted_data)
             self._avg_lin_spd = avg_lin_spd
@@ -305,6 +300,7 @@ class DataAnalyzer(object):
         with open("datatemp/masterfile.txt", 'a') as outfile:
             outfile.write(text)
         return
+
 
 def process_data(data, save_analyzed=False, save2master=False):
     """Auxiliary function to store data using a certain workflow.
