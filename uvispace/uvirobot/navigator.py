@@ -29,17 +29,17 @@ except ImportError:
     # Exit program if the settings module can't be found.
     sys.exit("Can't find settings module. Maybe environment variables are not"
              "set. Run the environment .sh script at the project root folder.")
-logger = logging.getLogger('controller')
+logger = logging.getLogger('navigator')
 
 
 def make_a_rectangle(my_robot):
     """Set the robot path to a rectangle of fixed vertices."""
     logger.info("Creating rectangle path")
-    point_a = {'x': 1.0, 'y': 1.0}
-    point_b = {'x': -1.0, 'y': 1.0}
-    point_c = {'x': -1.0, 'y': -1.0}
-    point_d = {'x': 1.0, 'y': -1.0}
-    point_e = {'x': 1.0, 'y': 0.0}
+    point_a = {'x': 1000, 'y': 1000}
+    point_b = {'x': -1000, 'y': 1000}
+    point_c = {'x': -1000, 'y': -1000}
+    point_d = {'x': 1000, 'y': -1000}
+    point_e = {'x': 1000, 'y': 0}
     my_robot.new_goal(point_a)
     my_robot.new_goal(point_b)
     my_robot.new_goal(point_c)
@@ -115,7 +115,7 @@ def main():
 
     # This exception forces to give the robot_id argument within run command.
     rectangle_path = False
-    help_msg = ('Usage: controller.py [-r <robot_id>], [--robotid=<robot_id>], '
+    help_msg = ('Usage: navigator.py [-r <robot_id>], [--robotid=<robot_id>], '
                 '[--rectangle]')
     try:
         opts, args = getopt.getopt(sys.argv[1:], "hr:",

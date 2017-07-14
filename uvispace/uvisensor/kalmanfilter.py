@@ -1,25 +1,25 @@
 #!/usr/bin/env python
-"""Module for implementing a Kalman filter.
+"""Module with a class for implementing a Kalman filter.
 
 The Kalman filter is a well-known algorithm for improving the
 localization of an object given measures of its position and a model of
 its behaviour.
 
-The algorithm is defined by two main stages, namely the state
+The algorithm is defined by two main stages, i.e.: the state
 prediction, that estimates the state (position) of the object given the
 previous one and the value of the input variables; and the fusion with
 the measurements, that filters the values obtained by the sensors and
 the prediction calculated on the previous stage.
-estimates the value that a sensor should obtain, given 
-the state prediction.
 
 Relevant documentation:
-* http://www.bzarg.com/p/how-a-kalman-filter-works-in-pictures/
-* http://www.cl.cam.ac.uk/~rmf25/papers
-/Understanding%20the%20Basis%20of%20the%20Kalman%20Filter.pdf
+-----------------------
 
-* http://biorobotics.ri.cmu.edu/papers/sbp_papers/integrated3/
-kleeman_kalman_basics.pdf
+* http://www.bzarg.com/p/how-a-kalman-filter-works-in-pictures/
+* `<http://www.cl.cam.ac.uk/~rmf25/papers
+  /Understanding%20the%20Basis%20of%20the%20Kalman%20Filter.pdf>`_
+
+* `<http://biorobotics.ri.cmu.edu/papers/sbp_papers/integrated3
+  /kleeman_kalman_basics.pdf>`_
 """
 # Third party libraries
 import numpy as np
@@ -30,9 +30,9 @@ class Kalman(object):
 
     It contains two methods for implementing the two stages of the
     Kalman filter (predict and update), that should be run alternating
-    each one.
+    each one; and two methods for updating the noise matrices.
 
-    Besides, the noise distributions can be changed before the update
+    The noise distributions can be changed before the update
     stage, and the Kalman gain will vary accordingly.
     """
 
@@ -85,8 +85,8 @@ class Kalman(object):
         self.B = np.array([[np.cos(self.states[2]), 0], 
                            [np.sin(self.states[2]), 0],
                            [0, 1]])
-        # Actual and predicted states covariance matrices.
-        self._P = np.eye(var_dim) * np.array([100**2, 100**2, (5*np.pi/180)**2])
+        # Actual and predicted states covariance matrices. Initially very high.
+        self._P = np.eye(var_dim) * np.array([1000**2, 1000**2, 2*np.pi**2])
         self._pred_P = np.zeros([var_dim, var_dim])
         # State and Measurement noise covariance matrix.
         self._Q = np.eye(var_dim) * np.array([100**2, 100**2, (5*np.pi/180)**2])
@@ -107,8 +107,16 @@ class Kalman(object):
         Note that the input dimensions must coincide with the dimensions
         of the system state variables.
 
+        NOTE: A more more accurate model would calculate the process
+        (prediction) noise depending on the magnitude of the input
+        variables. According to the propagation of errors theory, the
+        error of a multiplication is bigger when each of the products is
+        bigger i.e. in this case, the predicted position error is bigger
+        when the speeds are bigger (also when the time difference is
+        bigger).
+
         :param noise: new values for the process noise.
-        :type noise: var_dim length list or tuple; or a
+        :type noise: 'var_dim' length list or tuple; or a
          np.array(shape = (var_dim x var_dim))
         :return: the new process error matrix.
         """
@@ -143,7 +151,7 @@ class Kalman(object):
         of the system state variables.
 
         :param noise: new values for the measurement noise.
-        :type noise: var_dim length list or tuple; or a
+        :type noise: 'var_dim' length list or tuple; or a
          np.array(shape = (var_dim x var_dim))
         :return: the new measurement error matrix.
         """

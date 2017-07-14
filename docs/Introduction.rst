@@ -26,7 +26,7 @@ Hence, the whole system can be divided into three different elements:
   is executed there, whose main tasks are:
 
     - Communicate with the FPGA-based localization nodes, using the Ethernet
-    LAN network.
+      LAN network.
     - Merge the data obtained from the localization nodes.
     - Get the global coordinates of the UGVs.
     - Given the destination of the UGVs, calculate the optimal path.
@@ -59,7 +59,7 @@ localization nodes* using the Internet protocol through the Ethernet network.
 
 Regarding the control workflow, the system can be considered a closed loop,
 where the position of the UGV read by the cameras is fed back to the main
-controller that, along with the goal position, are used to determine the
+navigator that, along with the goal position, are used to determine the
 speed output sent to the UGV. The corresponding diagram can be seen below.
 
 ..  image:: /_static/workflow_control_diagram.png
@@ -88,7 +88,7 @@ The *uvirobot* package consist in 2 callable scripts:
   accordingly. Once the communication is established, the module *listens* for
   speed set points and send them to the UGV. When the execution is canceled,
   a plot with the delay times is obtained and then the program ends.
-- **controller.py** *listens* for input UGV position values and destination
+- **navigator.py** *listens* for input UGV position values and destination
   coordinates, calculates the UGV optimal path, and finally outputs the speed
   set points needed to achieve the planned path.
 
@@ -166,7 +166,7 @@ The package has, as well, 4 importable modules:
     :align: center
 
 Hardware design project (DEPRECATED)
--------------------------------------
+------------------------------------
 
 As stated before, the hardware system was designed for being implemented on an
 FPGA-based board and its main purpose is to provide a hardware interface for

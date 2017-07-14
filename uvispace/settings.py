@@ -27,11 +27,11 @@ LOGGING = {
         }
     },
     'handlers': {
-        'file_controller': {
+        'file_navigator': {
             'level': 'DEBUG',
             'formatter': 'verbose',
             'class': 'logging.FileHandler',
-            'filename': '/'.join([log_path, 'controller_{}.log'.format(
+            'filename': '/'.join([log_path, 'navigator_{}.log'.format(
                     time.strftime("%Y%m%d_%H%M%S"))]),
             'delay': True
         },
@@ -58,8 +58,8 @@ LOGGING = {
         }
     },
     'loggers': {
-        'controller': {
-            'handlers': ['file_controller', 'console'],
+        'navigator': {
+            'handlers': ['file_navigator', 'console'],
             'level': 'DEBUG'
         },
         'messenger': {
