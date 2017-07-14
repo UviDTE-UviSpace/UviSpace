@@ -454,7 +454,7 @@ raw2rgb u4(
     end
   end
 
-rgb2hue hue(
+rgb2hsv hsv(
   .clock(ccd_pixel_clk),
   .reset_n(hps2fpga_reset_n & video_stream_reset_n),
   // Data input
