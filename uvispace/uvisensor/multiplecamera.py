@@ -414,7 +414,7 @@ class DataFusionThread(threading.Thread):
             else:
                 # Set speeds to None in order to ignore Kalman prediction step.
                 speeds = None
-                logger.debug("Not received any speed set point from controller")
+                logger.debug("Not received any speed set point from navigator")
             # Sleep the rest of the cycle.
             while (time.time() - cycle_start_time) < self.cycletime:
                 pass
