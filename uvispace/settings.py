@@ -58,7 +58,7 @@ LOGGING = {
         }
     },
     'loggers': {
-        'controller': {
+        'navigator': {
             'handlers': ['file_controller', 'console'],
             'level': 'DEBUG'
         },

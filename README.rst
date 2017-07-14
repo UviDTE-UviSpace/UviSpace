@@ -55,10 +55,10 @@ The *messenger* module establish a connection with the board. It has been tested
    In [2]: run -m uvirobot.messenger -- -r <robot_id>
 
 
-controller
-----------
+navigator
+---------
 
-The *controller* module listens for new positions of the robot, as well as for destination goals typed by the user.
+The *navigator* module listens for new positions of the robot, as well as for destination goals typed by the user.
 
 * To run it, open a new Terminal, set up the environment, and execute the script using the Python interpreter. The execution will keep running until it is killed.
 
@@ -66,15 +66,15 @@ The *controller* module listens for new positions of the robot, as well as for d
 
    $ cd /<path_to_UviSpace>/uvispace/
    $ source set_environment.sh
-   $ python -m uvirobot/move_robot.py -r <robot_id>
+   $ python -m uvirobot/navigator.py -r <robot_id>
 
-* Alternatively, execute the *controller.py* module on an *IPython* session:
+* Alternatively, execute the *navigator.py* module on an *IPython* session:
 
 .. code-block:: python
 
    In [1]: cd /<path_to_UviSpace>/uvispace/
           /<path_to_UviSpace>/uvispace
-   In [2]: run -m uvirobot.move_robot -- -r <robot_id>
+   In [2]: run -m uvirobot.navigator -- -r <robot_id>
 
 
 =========
