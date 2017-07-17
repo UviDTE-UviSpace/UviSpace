@@ -61,7 +61,7 @@ def read_data(spreadsheet_name):
     """It reads poses and time from spreadsheet and returns them back.
 
     Each group of data is composed by 4 elements with the location of
-    the UGV at a given sample: time, "x" position, "y" position and 
+    the UGV at a given sample: time, "x" position, "y" position and
     angle "theta".
 
     :param str spreadsheet_name: name of spreadsheet that contain the
@@ -88,8 +88,7 @@ def read_data(spreadsheet_name):
         element = ws.cell(column=1, row=row).value
         # "Sum differerential data:" is the value of the next row to the last
         # data.
-        # TODO Change while exit condition
-        if element == 'Sum differential data:':
+        if not element:
             data_in_this_row = False
         else:
             # Reading data.
@@ -147,6 +146,8 @@ def write_spreadsheet(header, data_to_save, exp_name, exp_conditions,
         ws.cell(column=col+1, row=6).font = cell_formats['white_ft']
         ws.cell(column=col+1, row=6).fill = cell_formats['blue_fill']
         ws.cell(column=col+1, row=6).border = cell_formats['thick_bd']
+        my_cell = ws.cell(column=col+1, row=6)
+        ws.column_dimensions[my_cell.column].width = 10
     # Write in the spreadsheet the data.
     for row in range(rows):
         for col in range(cols):
@@ -160,24 +161,13 @@ def write_spreadsheet(header, data_to_save, exp_name, exp_conditions,
             else:
                 ws.cell(column=col+1, row=row+7).fill = cell_formats[
                                                                    'white_fill']
-            # TODO set the dimensions only once,not every time inside for loop
-            my_cell = ws.cell(column=col+1, row=row+7)
-            ws.column_dimensions[my_cell.column].width = 10
     # Writing and calculating statistics only if save_analyzed is True.
     if save_analyzed:
-        # Write to spreadsheet statistics and average speeds.
-        for row in range(rows+7, rows+13):
-            #Format to statistics average speeds.
-            ws.merge_cells(start_row=row, start_column=1, end_row=row,
-                           end_column=4)
-            ws.cell(column=1, row=row).alignment = cell_formats['right_al']
-            ws.cell(column=1, row=row).fill = cell_formats['blue_fill']
-            ws.cell(column=1, row=row).font = cell_formats['white_ft']
         # Headers of statistics.
-        ws.cell(column=1, row=rows+7, value='Sum differential data:')
-        ws.cell(column=1, row=rows+8, value='Mean differential data:')
-        ws.cell(column=1, row=rows+9, value='Variance differential data:')
-        ws.cell(column=1, row=rows+10, value='Std deviation differential data:')
+        ws.cell(column=2, row=rows+7, value='Sum differential data:')
+        ws.cell(column=2, row=rows+8, value='Mean differential data:')
+        ws.cell(column=2, row=rows+9, value='Variance differential data:')
+        ws.cell(column=2, row=rows+10, value='Std deviation differential data:')
         # Write in spreadsheet headers of average speeds.
         ws.cell(column=8, row=rows+11, value='Average Linear Speed:')
         ws.cell(column=8, row=rows+12, value='Average Angular Speed:')
@@ -186,22 +176,27 @@ def write_spreadsheet(header, data_to_save, exp_name, exp_conditions,
                        end_column=10)
         ws.merge_cells(start_row=rows+12,start_column=8,end_row=rows+12,
                        end_column=10)
-        # Write and calculate in spreadsheet the dynamic statistics.
-        for col in range(5, cols+1):
-            letter_range = openpyxl.utils.get_column_letter(col)
-            start_range = '{}{}'.format(letter_range, 7)
-            end_range = '{}{}'.format(letter_range, rows+6)
-            interval = '{}:{}'.format(start_range,end_range)
-            ws.cell(column=col, row=rows+7,
-                    value= '=SUM({})\n'.format(interval))
-            ws.cell(column=col, row=rows+8,
-                    value= '=AVERAGE({})\n'.format(interval))
-            ws.cell(column=col, row=rows+9,
-                    value= '=VAR({})\n'.format(interval))
-            ws.cell(column=col, row=rows+10,
-                    value= '=STDEV({})\n'.format(interval))
-            # Format to dynamic statistics.
-            for row in range(rows+7, rows+13):
+        # Write to spreadsheet statistics and average speeds.
+        for row in range(rows+7, rows+13):
+            #Format to statistics average speeds.
+            ws.merge_cells(start_row=row, start_column=2, end_row=row,
+                           end_column=4)
+            # Write and calculate in spreadsheet the dynamic statistics.
+            for col in range(1, cols+1):
+                if col >= 5:
+                    letter_range = openpyxl.utils.get_column_letter(col)
+                    start_range = '{}{}'.format(letter_range, 7)
+                    end_range = '{}{}'.format(letter_range, rows+6)
+                    interval = '{}:{}'.format(start_range,end_range)
+                    ws.cell(column=col, row=rows+7,
+                            value= '=SUM({})\n'.format(interval))
+                    ws.cell(column=col, row=rows+8,
+                            value= '=AVERAGE({})\n'.format(interval))
+                    ws.cell(column=col, row=rows+9,
+                            value= '=VAR({})\n'.format(interval))
+                    ws.cell(column=col, row=rows+10,
+                            value= '=STDEV({})\n'.format(interval))
+                # Format to dynamic statistics.
                 cell = ws.cell(column=col, row=row)
                 cell.number_format = '0.00'
                 cell.font = cell_formats['white_ft']
@@ -212,9 +207,10 @@ def write_spreadsheet(header, data_to_save, exp_name, exp_conditions,
                 value= '=1000*SQRT(((B{finalrow}-B7)^2)'
                         '+(((C{finalrow}-C7)^2)))/E{rowtime}\n'
                         ''.format(finalrow=rows+6, rowtime=rows+7))
-        ws.cell(column=11, row=rows+12, 
+        ws.cell(column=11, row=rows+12,
                 value= '=1000*(D{lastdata}-D7)/E{rowtime}\n'
                        ''.format(lastdata=rows+6, rowtime=rows+7))
+
     wb.save(spreadsheet_name)
     return spreadsheet_name
 
@@ -229,12 +225,11 @@ def save2master_xlsx(exp_name, sp_left, sp_right, avg_lin_spd, avg_ang_spd):
     :param float64 avg_ang_spd: average angular speed of UGV.
     """
     # Data search to save in masterspreadsheet.
-    master_dir = "file://{}{}".format(settings.parent_path, 
+    master_dir = "'file://{}{}".format(settings.parent_path,
                                       "/uvisensor/datatemp/")
     spreadsheet_ext= '.xlsx'
     name_sheet = '\'#$Sheet.'
-    avg_spd_column = ​​'K'
-
+    avg_spd_column = 'K'
     try:
         wb = openpyxl.load_workbook('datatemp/{}.xlsx'.format(exp_name))
     except IOError:
@@ -251,8 +246,8 @@ def save2master_xlsx(exp_name, sp_left, sp_right, avg_lin_spd, avg_ang_spd):
             row += 1
     dynamic_data = ''.join([master_dir, exp_name, spreadsheet_ext, name_sheet,
                             avg_spd_column])
-    dynamic_avg_lin_spd = '{}{}'.format(dynamic_data, row)
-    dynamic_avg_avg_spd = '{}{}'.format(dynamic_data, (row+1))
+    dynamic_avg_lin_spd = '{}{}'.format(dynamic_data, row+4)
+    dynamic_avg_avg_spd = '{}{}'.format(dynamic_data, (row+5))
     # Save data in masterspreadsheet.
     try:
         wb = openpyxl.load_workbook("datatemp/masterfile.xlsx")
@@ -265,8 +260,8 @@ def save2master_xlsx(exp_name, sp_left, sp_right, avg_lin_spd, avg_ang_spd):
     lastrow = 1
     written_row = True
     while written_row:
-        element = ws.cell(column=1, row=row).value
-        if element == None:
+        element = ws.cell(column=1, row=lastrow).value
+        if element is None:
             written_row = False
         else:
             lastrow += 1

@@ -89,7 +89,7 @@ class DataAnalyzer(object):
                     # Initialization filtered_data array.
                     filtered_data = np.copy(self._raw_data[row]).reshape(1,4)
                 else:
-                    filtered_data = np.vstack([filtered_data, 
+                    filtered_data = np.vstack([filtered_data,
                                                self._raw_data[row]])
         # Unnecesary update raw_data if only have one data.
         if self._raw_data.shape[0] > 1:
@@ -118,7 +118,7 @@ class DataAnalyzer(object):
         # for at least 4 seconds).
         upper_mode = stats.mode(self._raw_data[0:20, 1:3])[0]
         mode_rows = np.all(self._raw_data[:, 1:3]==upper_mode, axis=1)
-        mode_indexes = np.where(self._raw_data)[0]
+        mode_indexes = np.where(mode_rows)[0]
         # If there are not initial values of stopped UGV is not updated.
         if mode_indexes.shape[0] > 0:
             row_upper_index = mode_indexes.max()
@@ -127,7 +127,7 @@ class DataAnalyzer(object):
         # for at least 4 seconds).
         lower_mode = stats.mode(self._raw_data[(rows-20):rows, 1:3])[0]
         mode_rows = np.all(self._raw_data[:, 1:3]==lower_mode, axis=1)
-        mode_indexes = np.where(self._raw_data)[0]
+        mode_indexes = np.where(mode_rows)[0]
         # If there are not final values of stopped UGV is not updated.
         if mode_indexes.shape[0] > 0:
             row_lower_index = mode_indexes.min() + 1
@@ -135,7 +135,7 @@ class DataAnalyzer(object):
         # The next case happen if the UGV is stopped always. Small errors in the
         # data taken, imply that the lower row is above the upper row.
         if row_upper_index > row_lower_index:
-            clipped_data = self._raw_data[0,:].reshape(1, clipped_data.shape[0])
+            clipped_data = self._raw_data[0,:].reshape(1, 4)
         # Normal movement.
         else:
             clipped_data = self._raw_data[row_upper_index:row_lower_index, :]
@@ -247,9 +247,9 @@ class DataAnalyzer(object):
         datestamp = "{}".format(time.strftime("%d_%m_%Y"))
         # The experiment name is formed by the experiment date, its number and
         # the speed setpoints.
-        experiment_name = "{}_{}-L{}-R{}".format(datestamp, (index+1),
-                                                 self._sp_left, self._sp_right)
-        txt_name = "datatemp/{}.txt".format(experiment_name)
+        exp_name = "{}_{}-L{}-R{}".format(datestamp, (index+1), self._sp_left,
+                                          self._sp_right)
+        txt_name = "datatemp/{}.txt".format(exp_name)
         # Header for save data with numpy savetxt.
         numpy_header = ""
         for element in header:
@@ -266,26 +266,26 @@ class DataAnalyzer(object):
                           "right rear wheel ({0}, {1})\n-rear axis UGV in {0} x"
                           "".format(pos_x_init, pos_y_init))
         # Call to function to write to spreadsheet.
-        wf.write_spreadsheet(header, data_to_save, experiment_name,
+        wf.write_spreadsheet(header, data_to_save, exp_name,
                              exp_conditions, save_analyzed)
         # Only data can be saved in the master file if the analyzed data has
         # been saved.
         if save_analyzed and save2master:
-            wf.save2master_xlsx(experiment_name, self._sp_left, self._sp_right,
+            wf.save2master_xlsx(exp_name, self._sp_left, self._sp_right,
                                 self._avg_lin_spd, self._avg_ang_spd)
-            self.save2master_txt(experiment_name)
+            self.save2master_txt(exp_name)
         return data_to_save
 
-    def save2master_txt(self, experiment_name):
+    def save2master_txt(self, exp_name):
         """Save linear and angular speeds data in master text file.
 
-        :param str experiment_name: name of performed experiment.
+        :param str exp_name: name of performed experiment.
         """
         #TODO improve format
-        data_master = np.array([experiment_name, self._sp_left, self._sp_right,
+        data_master = np.array([exp_name, self._sp_left, self._sp_right,
                                 self._avg_lin_spd, self._avg_ang_spd])
         for value in data_master:
-            if col == 0:
+            if value == exp_name:
                 #TODO use '.format' string construction style
                 text = "{:>9}\t".format(value)
             else:
@@ -314,7 +314,7 @@ def process_data(data, save_analyzed=False, save2master=False):
     """
     # Analysis of data.
     analysis = DataAnalyzer()
-    analysis.load_data(data)
+    analysis.set_data(data)
     analysis.remove_stop_poses()
     analysis.remove_repeated_poses()
     analysis.get_processed_data()
@@ -322,7 +322,7 @@ def process_data(data, save_analyzed=False, save2master=False):
     # Request the setpoints to the user.
     sp_left = input("Introduce value of sp_left between 0 and 255\n")
     sp_right = input("Introduce value of sp_right between 0 and 255\n")
-    analysis.load_setpoints_save(sp_left, sp_right)
+    analysis.set_setpoints(sp_left, sp_right)
     # Data save.
     analysis.save2data(save_analyzed=save_analyzed, save2master=save2master)
     return

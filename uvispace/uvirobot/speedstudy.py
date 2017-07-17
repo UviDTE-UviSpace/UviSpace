@@ -2,7 +2,7 @@
 """Auxiliary program to move the UGV at constant speed.
 
 This module allows the UGV to move at a constant speed for a given time.
-These values ​​are required to the user.
+These values are required to the user.
 """
 # Standard libraries
 import getopt

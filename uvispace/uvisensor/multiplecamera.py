@@ -21,6 +21,7 @@ have to be reset.
 """
 # Standard libraries
 import copy
+import getopt
 import glob
 import logging
 import os
@@ -234,7 +235,7 @@ class DataFusionThread(threading.Thread):
 
     def __init__(self, triangles, ntriangles, conditions, inborders,
                  quadrant_limits, begin_events, end_event, reset_flags,
-                 name='Fusion Thread', save2file=False):
+                 save2file, name='Fusion Thread', ):
         """
         Class constructor method
         """
@@ -394,7 +395,6 @@ class DataFusionThread(threading.Thread):
             # Update the measured pose only if a triangle was detected.
             if detected_triangle:
                 pose = triangle.get_pose()
-                self.sockets['pose_publisher'].send_json(pose_msg)
                 logger.info("Detected triangle at {}mm and {} radians."
                             "".format(pose[0:2], pose[2]))
                 # Set the measurement noise to the cameras error, calculated
@@ -422,16 +422,16 @@ class DataFusionThread(threading.Thread):
             # Allow to poll only during the remaining cycle time.
             polling_time = self.cycletime - (time.time()-cycle_start_time)
             # Subtract another amount of time for doing the other routines.
-            polling_time -= 0.005
+            logger.info("polling {}s".format(polling_time))
             events = dict(self.poller.poll(polling_time))
             if (self.sockets['speed_subscriber'] in events
                     and events[self.sockets['speed_subscriber']] == zmq.POLLIN):
                 speeds = self.sockets['speed_subscriber'].recv_json()
-                logger.debug("Received new speed set point: {}".format(speeds))
+                logger.info("Received new speed set point: {}".format(speeds))
             else:
                 # Set speeds to None in order to ignore Kalman prediction step.
                 speeds = None
-                logger.debug("Not received any speed set point from navigator")
+                logger.info("Not received any speed set point from navigator")
             # Sleep the rest of the cycle.
             while (time.time() - cycle_start_time) < self.cycletime:
                 pass
@@ -492,6 +492,23 @@ def main():
     Read configuration files, initialize variables and set up threads.
     :return:
     """
+    # Main routine
+    help_msg = ("Usage: multiplecamera.py [-s <save2file>],"
+                " [--save2file=<True/False>]")
+    # This try/except clause forces to give the robot_id argument.
+    try:
+        opts, args = getopt.getopt(sys.argv[1:], "hs:", ["save="])
+    except getopt.GetoptError:
+        print(help_msg)
+    if not opts:
+        print help_msg
+        sys.exit()
+    for opt, arg in opts:
+        if opt == '-h':
+            print help_msg
+            sys.exit()
+        elif opt in ("-s", "--save2file"):
+            save2file = bool(arg)
     logger.info("BEGINNING MAIN EXECUTION")
     # Get the relative path to all the config files stored in /config folder.
     conf_files = glob.glob("./resources/config/*.cfg")
@@ -526,7 +543,7 @@ def main():
     # Thread for merging the data obtained at every CameraThread.
     threads.append(DataFusionThread(triangles, ntriangles, conditions,
                                     inborders, quadrant_limits, begin_events,
-                                    end_event, reset_flags))
+                                    end_event, reset_flags, save2file))
     # Thread for getting user input.
     threads.append(UserThread(begin_events, end_event))
     # start threads
