@@ -448,36 +448,43 @@ raw2rgb u4(
         fifo_write_enable <= raw_rgb_dval;
       end
       else begin
-        fifo1_writedata <= {8'h00, hue_hue[7:0]};
+        fifo1_writedata <= {8'h00, binarized_8bit[7:0]};
         fifo_write_enable <= out_hue_valid;
       end
     end
   end
 
-rgb2hsv hsv(
+image_processing img_proc(
   .clock(ccd_pixel_clk),
   .reset_n(hps2fpga_reset_n & video_stream_reset_n),
   // Data input
   .in_red(raw_rgb_red[11:4]),
   .in_green(raw_rgb_green[11:4]),
   .in_blue(raw_rgb_blue[11:4]),
+  .hue_l_threshold(lower_hue),
+  .hue_h_threshold(higher_hue),
+  .sat_threshold(saturation_level),
+  .bri_threshold(brightness_level),
   .in_valid(raw_rgb_dval),
-  .in_visual(1'b1),
-  .in_done(1'b1),
   // Data output
-  .out_red(hue_red),
-  .out_green(hue_green),
-  .out_blue(hue_blue),
   .out_hue(hue_hue),
-  .out_valid(out_hue_valid),
-  .out_visual(),
-  .out_done()
+  .out_bin(binarized),
+  .out_valid(out_hue_valid)
   );
+  wire  [7:0] lower_hue;
+  wire  [7:0] higher_hue;
+  wire  [7:0] saturation_level;
+  wire  [7:0] brightness_level;
   wire  [7:0] hue_hue;
-  wire  [7:0] hue_red;
-  wire  [7:0] hue_green;
-  wire  [7:0] hue_blue;
+  wire        binarized;
   wire        out_hue_valid;
+  wire  [7:0] binarized_8bit;
+  // Test values
+  assign binarized_8bit = binarized ? 8'd255 : 8'd0;
+  assign lower_hue = 8'd90;
+  assign higher_hue = 8'd130;
+  assign saturation_level = 8'd51;
+  assign brigthness_level = 8'd51;
 
   
 // image_capture: save RGB and Hue into HPS memory
@@ -486,12 +493,12 @@ image_capture imgcap1 (
 	.clk ( ccd_pixel_clk ),
 	.reset_n (hps2fpga_reset_n & video_stream_reset_n),
 	// Signals from the video stream
-	.R( hue_red ),
-	.G( hue_green ),
-	.B( hue_blue ),
+	.R( raw_rgb_red[11:4] ),
+	.G( raw_rgb_green[11:4] ),
+	.B( raw_rgb_blue[11:4] ),
 	.Gray( hue_hue ),
 	.frame_valid( ccd_fval_raw ),
-	.data_valid( out_hue_valid ),
+	.data_valid( raw_rgb_dval ),
 	// Signals to control this component.
 	.start_capture( start_capture ),
 	.image_width( capture_width ),

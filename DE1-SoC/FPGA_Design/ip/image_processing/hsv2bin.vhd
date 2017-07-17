@@ -58,6 +58,7 @@ begin
             else
                 out_bin <= '0';
             end if;
+            out_valid <= in_valid;
         end if;
     end process main_process;
 

@@ -13,8 +13,8 @@ entity image_processing is
         COMPONENT_SIZE  : integer := 8
     );
     port(
-        -- Clock and reset.
-        clk             : in STD_LOGIC;
+        -- Control signals
+        clock           : in STD_LOGIC;
         reset_n         : in STD_LOGIC;
         -- Data input
         in_red          : in STD_LOGIC_VECTOR(COMPONENT_SIZE-1 downto 0);
@@ -26,6 +26,7 @@ entity image_processing is
         bri_threshold   : in STD_LOGIC_VECTOR(COMPONENT_SIZE-1 downto 0);
         in_valid        : in STD_LOGIC;
         -- Data output
+        out_hue         : out STD_LOGIC_VECTOR(COMPONENT_SIZE-1 downto 0);
         out_bin         : out STD_LOGIC;
         out_valid       : out STD_LOGIC
     );
@@ -34,13 +35,14 @@ end image_processing;
 
 -- Top component architecture
 architecture arch of image_processing is
+
     -- Sub-components declarations.
     --
     -- This components returns the HSV components of the given RGB image.
     component rgb2hsv
         port(
             -- Control signals
-            clk             : in STD_LOGIC;
+            clock           : in STD_LOGIC;
             reset_n         : in STD_LOGIC;
             -- Data input
             in_red          : in STD_LOGIC_VECTOR(COMPONENT_SIZE-1 downto 0);
@@ -97,43 +99,43 @@ architecture arch of image_processing is
         rgb2hsv_component : rgb2hsv
         port map(
                 -- Control signals
-                clk             => clk;
-                reset_n         => reset_n;
+                clock           => clock,
+                reset_n         => reset_n,
                 -- Data input
-                in_red          => in_red;
-                in_green        => in_green;
-                in_blue         => in_blue;
-                in_valid        => in_valid;
-                in_visual       => '1';
-                in_done         => '1';
+                in_red          => in_red,
+                in_green        => in_green,
+                in_blue         => in_blue,
+                in_valid        => in_valid,
+                in_visual       => '1',
+                in_done         => '1',
                 -- Data output
-                out_red         => open;
-                out_green       => open;
-                out_blue        => open;
-                out_hue         => hsv_out_hue;
-                out_saturation  => hsv_out_saturation;
-                out_brightness  => hsv_out_brightness;
-                out_valid       => hsv_out_valid;
-                out_visual      => open;
+                out_red         => open,
+                out_green       => open,
+                out_blue        => open,
+                out_hue         => hsv_out_hue,
+                out_saturation  => hsv_out_saturation,
+                out_brightness  => hsv_out_brightness,
+                out_valid       => hsv_out_valid,
+                out_visual      => open,
                 out_done        => open
                 );
         -- Instantiation and mapping of the hsv2bin component. 
         hsv2bin_component : hsv2bin
         port map(
                 -- Control signals
-                clk             => clk;
-                reset_n         => reset_n;
+                clk             => clock,
+                reset_n         => reset_n,
                 -- Data input
-                in_hue          => hsv_out_hue;
-                in_saturation   => hsv_out_saturation;
-                in_brightness   => hsv_out_brightness;
-                hue_l_threshold => hue_l_threshold;
-                hue_h_threshold => hue_h_threshold;
-                sat_threshold   => sat_threshold;
-                bri_threshold   => bri_threshold;
-                in_valid        => hsv_out_valid;
+                hue          => hsv_out_hue,
+                saturation   => hsv_out_saturation,
+                brightness   => hsv_out_brightness,
+                hue_l_threshold => hue_l_threshold,
+                hue_h_threshold => hue_h_threshold,
+                sat_threshold   => sat_threshold,
+                bri_threshold   => bri_threshold,
+                in_valid        => hsv_out_valid,
                 -- Data output
-                out_bin         => out_bin;
+                out_bin         => out_bin,
                 out_valid       => out_valid
                 );
 
