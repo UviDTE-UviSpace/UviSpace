@@ -206,11 +206,12 @@ def write_spreadsheet(header, data_to_save, experiment_name, exp_conditions,
                 cell.fill = cell_formats['blue_fill']
                 cell.alignment = cell_formats['right_al']
         # Dynamic average speeds.
-        ws.cell(column=11, row=rows+11, value= '=1000*SQRT(((B{rows}-B7)^2)+'
-                '(((C{rows}-C7)^2)))/E{rows2}\n'
-                ''.format(rows=rows+6, rows2=rows+7))
-        ws.cell(column=11, row=rows+12, value= '=1000*(D{rows}-D7)/'
-                'E{rows2}\n'.format(rows=rows+6, rows2=rows+7))
+        ws.cell(column=11, row=rows+11,
+                value= '=1000*SQRT(((B{rowlastdata}-B7)^2)'
+                '+(((C{rowlastdata}-C7)^2)))/E{rowtime}\n'
+                ''.format(rowlastdata=rows+6, rowtime=rows+7))
+        ws.cell(column=11, row=rows+12, value= '=1000*(D{rowlastdata}-D7)'
+                '/E{rowtime}\n'.format(rowlastdata=rows+6, rowtotaltime=rows+7))
     wb.save(name_spreadsheet)
     return name_spreadsheet
 
@@ -226,10 +227,12 @@ def save2master_xlsx(experiment_name, sp_left, sp_right, avg_lin_spd,
     :param float64 avg_ang_spd: average angular speed of UGV.
     """
     # Data search to save in masterspreadsheet.
-    proyect_folder = '\'file:///home/joslamasvarela/UviSpace/'
-    master_folder = 'uvispace/uvisensor/datatemp/'
+    proyect_dir = '\'file:///home/joslamasvarela/UviSpace/'
+    master_dir = 'uvispace/uvisensor/datatemp/'
     spreadsheet_ext= '.xlsx'
     name_sheet = '\'#$Sheet.'
+    avg_spd_column = ​​'K'
+
     try:
         wb = openpyxl.load_workbook('datatemp/{}.xlsx'.format(experiment_name))
     except:
@@ -244,8 +247,8 @@ def save2master_xlsx(experiment_name, sp_left, sp_right, avg_lin_spd,
             written_row = False
         else:
             row +=1
-    dynamic_data = (''.join([proyect_folder, master_folder, experiment_name,
-                    spreadsheet_ext, name_sheet, 'K']))
+    dynamic_data = (''.join([proyect_dir, master_dir, experiment_name, 
+                    spreadsheet_ext, name_sheet, avg_spd_column]))
     dynamic_avg_lin_spd = '{}{}'.format(dynamic_data, row)
     dynamic_avg_avg_spd = '{}{}'.format(dynamic_data, (row+1))
     # Save data in masterspreadsheet.
