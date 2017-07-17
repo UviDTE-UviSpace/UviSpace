@@ -145,12 +145,12 @@ class DataAnalyzer(object):
     def get_processed_data(self):
         """Get differential data and relative linear and angular speed.
 
-        Difference data are obtained between two consecutive samples,
-        and relatives linear and angular speeds are calculated from
+        Differential data is obtained between two consecutive samples,
+        and relative linear and angular speeds are calculated from
         them.
 
-        It also obtain the absolute linear and angular speeds of the
-        experiment.
+        The absolute linear and angular speeds of the experiment is also
+        obtained.
 
         :returns: [formatted_data, avg_lin_spd, avg_ang_spd]
           * *formatted_data* data with differential values and angular
@@ -159,24 +159,23 @@ class DataAnalyzer(object):
           * *avg_ang_spd* average angular speed of UGV.
         :rtype: [numpy.array float64 (shape=Mx11), float64, float64]
         """
-        # Calculate differential values.
-        # Work_data is the data matrix to be manipulated in this function.
+        # work_data is the data matrix to be manipulated in this function.
         work_data = np.copy(self._raw_data)
         rows = work_data.shape[0]
-        # # Unnecesary manipulate raw_data if only have one data.
+        # Unnecesary to manipulate raw_data if there is only one sample.
         if rows > 1:
             # First sample, time zero.
             work_data[:, 0] -= work_data[0, 0]
             # Differential data matrix: current sample minus previous sample in
             # data.
             diff_data = np.zeros_like(work_data)
-            diff_data[1:] = work_data[1:] - work_data[0:-1]
+            diff_data[1:] = work_data[1:] - work_data[0: -1]
             # Vector differential length displaced.
             diff_length = np.sqrt(diff_data[:, 1]**2 + diff_data[:, 2]**2)
             # The direction is negative when the angular speed and vehicle angle
             # difference is bigger than pi/2 (90 degrees).
             speed_angles = np.arctan2(diff_data[:, 2], diff_data[:, 1])
-            # Sign of the speed of the UGV with respect to itself.
+            # The sign of the UGV speed represents the direction on X axis.
             sign_spd = np.ones([(rows), 1])
             sign_spd[np.abs(work_data[:, 3] - speed_angles) > (np.pi/2)] *= -1
             # Vector differential length displaced.
@@ -190,9 +189,9 @@ class DataAnalyzer(object):
             diff_data = np.insert(diff_data, 4, diff_length, axis=1)
             diff_data = np.insert(diff_data, 5, diff_speed, axis=1)
             diff_data = np.insert(diff_data, 6, diff_angl_speed, axis=1)
-            # Complete work data matrix with differential_data.
+            # Complete work_data matrix with differential data.
             work_data = np.hstack([work_data, diff_data])
-            # Calculate of average speed and average angular speed.
+            # Calculate average linear and angular speeds.
             sum_data = diff_data.sum(axis=0)
             total_length = np.sqrt((work_data[-1, 1] - work_data [0, 1])**2
                                     + (work_data[-1, 2] - work_data [0, 2])**2)
@@ -203,7 +202,7 @@ class DataAnalyzer(object):
             self._analyzed_data = np.copy(formatted_data)
             self._avg_lin_spd = avg_lin_spd
             self._avg_ang_spd = avg_ang_spd
-        # If only have one data.
+        # Case that there is only one sample.
         else:
             self._analyzed_data[:, :4] = self._raw_data
             formatted_data = 0
@@ -212,7 +211,7 @@ class DataAnalyzer(object):
         return (formatted_data, avg_lin_spd, avg_ang_spd)
 
     def save2data(self, save_analyzed=False, save2master=False):
-        """Saves the data poses in a spreadsheet and in a text file.
+        """Saves the poses data in a spreadsheet and in a text file.
 
         This function prepares the name of the file, the headers, and
         the conditions of the experiment performed. Once this is done,
@@ -232,36 +231,34 @@ class DataAnalyzer(object):
         if save_analyzed:
             data_to_save = np.copy(self._analyzed_data)
             # Header construction.
-            header = np.array(['Time', 'Pos x', 'Pos y', 'Angle',
-                                     'Diff Time', 'Diff Posx', 'Diff Posy',
-                                     'Diff Angl', 'Diff Leng', 'Rel LnSpd',
-                                     'Rel AnSpd'])
+            header = np.array(['Time', 'Pos x', 'Pos y', 'Angle', 'Diff Time',
+                               'Diff Posx', 'Diff Posy', 'Diff Angl',
+                               'Diff Leng', 'Rel LnSpd', 'Rel AnSpd'])
         else:
             data_to_save = np.copy(self._raw_data)
             # Header construction.
             header = np.array(['Time', 'Pos x', 'Pos y', 'Angle'])
-        # Determine number of saved experiments to add the next number to
-        # the file name. It get from the number of spreadsheets in the
-        # folder.
-        exist_file = glob.glob("datatemp/*.xlsx")
-        exist_file.sort()
-        index = len(exist_file)
+        # Determine the number of previously saved experiments in order to add
+        # the corresponding index to the file name. It is obtained from the
+        # number of spreadsheets in the 'datatemp' folder.
+        xlsx_files = glob.glob("datatemp/*.xlsx")
+        xlsx_files.sort()
+        index = len(xlsx_files)
         datestamp = "{}".format(time.strftime("%d_%m_%Y"))
-        # The experiment name is a ensemble of experiment date, experiment
-        # number and setpoints.
+        # The experiment name is formed by the experiment date, its number and
+        # the speed setpoints.
         experiment_name = "{}_{}-L{}-R{}".format(datestamp, (index+1),
                                                  self._sp_left, self._sp_right)
-        name_txt = "datatemp/{}.txt".format(experiment_name)
+        txt_name = "datatemp/{}.txt".format(experiment_name)
         # Header for save data with numpy savetxt.
-        header_numpy = ''
-        for col in range (header.shape[0]):
-            element = header[col]
-            element = '%9s' % (element)
-            header_numpy = '{}{}\t'.format(header_numpy, element)
+        numpy_header = ""
+        for element in header:
+            numpy_header = "{}{:>9}\t".format(numpy_header, element)
         # Call to save data in textfile.
-        np.savetxt(name_txt, data_to_save, delimiter='\t', fmt='%9.2f',
-                   header=header_numpy, comments='')
-        # Experiment conditions.
+        np.savetxt(txt_name, data_to_save, delimiter='\t', fmt='%9.2f',
+                   header=numpy_header, comments='')
+        # Add (or subtract) the relative distance from the triangle base to the
+        # UGV corner.
         pos_x_init = int(data_to_save[0, 1] - 52)
         pos_y_init = int(data_to_save[0, 2] + 110)
         exp_conditions = ("Initial position of the UGV in the experiment:\n"
@@ -280,22 +277,20 @@ class DataAnalyzer(object):
         return data_to_save
 
     def save2master_txt(self, experiment_name):
-        """Save linear and angular speed data in master text file.
+        """Save linear and angular speeds data in master text file.
 
-        :param str experiment_name: name of experiment performed.
+        :param str experiment_name: name of performed experiment.
         """
         #TODO improve format
         data_master = np.array([experiment_name, self._sp_left, self._sp_right,
                                 self._avg_lin_spd, self._avg_ang_spd])
-        for col in range (data_master.shape[0]):
-            value = data_master[col]
+        for value in data_master:
             if col == 0:
                 #TODO use '.format' string construction style
-                text = '%9s' % (value)
+                text = "{:>9}\t".format(value)
             else:
                 value = float(value)
-                value = '%9.2f' % (value)
-                text = '{}\t\t{}'.format(text, value)
+                text = '{}\t\t{}\t'.format(text, value)
         text = '{}\n'.format(text)
         with open("datatemp/masterfile.txt", 'a') as outfile:
             outfile.write(text)
