@@ -1,21 +1,28 @@
 #!/usr/bin/env python
 """Auxiliary program for write in spreadsheet with format
 
-It contains functions that write the data of poses and time in a
-spreadsheet with format. Some of the results are written dynamically
+It contains functions that write the poses data and time in a
+spreadsheet with format. Some of the results are written dynamically,
 allowing their modification by altering certain values.
 
 It also contains a function to read data from an excel sheet and pass
-them to a numpy.array (float64) array.
+it to a NumPy (float64) array.
 """
 # Standard libraries
 import numpy as np
 # Excel read/write library
 import openpyxl
 
-"""Dictionary with different formats to apply to the cells when writes
-the data in a spreadsheet.
-"""
+try:
+    # uvispace settings.
+    import settings
+except ImportError:
+    # Exit program if the settings module can't be found.
+    sys.exit("Can't find settings module. Maybe environment variables are not"
+             "set. Run the environment .sh script at the project root folder.")
+
+# Dictionary with different formats to apply to the cells when writes
+# the data in a spreadsheet.
 cell_formats = {
     # Types of text alignment.
     'center_al': openpyxl.styles.Alignment(horizontal='center',
@@ -49,70 +56,65 @@ cell_formats = {
                                               end_color='FFFFFFFF')
 }
 
-def read_data(name_spreadsheet):
-    """It allows to read poses and time of spreadsheet.
 
-    These data are returned.
+def read_data(spreadsheet_name):
+    """It reads poses and time from spreadsheet and returns them back.
 
-    Each group of data is composed to 4 elements about the location of
-    the UGV at a given time: time, position "x", position "y" and angle
-    "theta".
+    Each group of data is composed by 4 elements with the location of
+    the UGV at a given sample: time, "x" position, "y" position and 
+    angle "theta".
 
-    :param str name_spreadsheet: name of spreadsheet that contain the
+    :param str spreadsheet_name: name of spreadsheet that contain the
     data to be read.
-    :return: matrix dimentions Mx4 with read data. M is the number of
-    rows corresponding to the number of data read.
+    :return: Mx4 matrix with read data. M corresponds to the number of
+    data samples (rows).
     :rtype: numpy.array(shape=Mx4)
     """
     # Open spreadsheet
     try:
-        wb = openpyxl.load_workbook(name_spreadsheet)
+        wb = openpyxl.load_workbook(spreadsheet_name)
     except IOError:
         wb = openpyxl.Workbook()
     ws = wb.active
     # Initialization of matrixes for data.
-    data = np.array([0, 0, 0, 0]).astype(np.float64)
     new_data = np.array([0, 0, 0, 0]).astype(np.float64)
     # Rows 1 and 2 are for the file name, the next three rows describe the
     # experiment parameters, and the 6 is the header in any type file.
     # Start reading in row 7.
     row = 7
-    # Number of columns in the matrix.
-    cols = data.shape[0]
     # Loop for reading data.
     data_in_this_row = True
     while data_in_this_row:
         element = ws.cell(column=1, row=row).value
         # "Sum differerential data:" is the value of the next row to the last
         # data.
+        # TODO Change while exit condition
         if element == 'Sum differential data:':
             data_in_this_row = False
         else:
             # Reading data.
-            for col in range (0, cols):
-                element = ws.cell(column=col+1, row=row).value
-                new_data[col] = element
+            for col in range(4):
+                new_data[col] = ws.cell(column=col+1, row=row).value
             if row == 7:
                 # Substitution of row of zeros by first row of data read.
-                data = np.copy(new_data)
+                data = new_data
             else:
                 data = np.vstack([data, new_data])
             row +=1
     rounded_data = np.round(data, 2)
     return rounded_data
 
-def write_spreadsheet(header, data_to_save, experiment_name, exp_conditions,
+
+def write_spreadsheet(header, data_to_save, exp_name, exp_conditions,
                       save_analyzed):
     """
-    Receives poses and time, and saves them in a spreadsheet.
+    Receive poses and time; and format and write them to a spreadsheet.
 
-    The data is write in a spreadsheet with format.
-
-    :param header: contains header to save in spreadsheet. It can have
-     4 or 11 elements (M).
+    :param header: contains the header to save in spreadsheet. It can
+    have 4 or 11 elements (M).
     :type header: numpy.array str (1xM)
     :param data_to_save: contains data to save in spreadsheet.
-    :param str experiment_name: name of experiment where the data will
+    :param str exp_name: name of experiment where the data will
      be saved.
     :param str exp_conditions: contains string with experiment
      description.
@@ -120,15 +122,15 @@ def write_spreadsheet(header, data_to_save, experiment_name, exp_conditions,
     :return: file name where data was saved.
     :rtype: str
     """
-    name_spreadsheet = "datatemp/{}.xlsx".format(experiment_name)
+    spreadsheet_name = "datatemp/{}.xlsx".format(exp_name)
     try:
-        wb = openpyxl.load_workbook(name_spreadsheet)
-    except:
+        wb = openpyxl.load_workbook(spreadsheet_name)
+    except IOError:
         wb = openpyxl.Workbook()
     ws = wb.active
     # Spreadsheet title.
     ws.merge_cells('A1:K2')
-    ws.cell('A1').value = experiment_name
+    ws.cell('A1').value = exp_name
     ws.cell('A1').alignment = cell_formats['center_al']
     ws.cell('A1').font = cell_formats['title_ft']
     ws.cell('A1').fill = cell_formats['blue_fill']
@@ -136,20 +138,19 @@ def write_spreadsheet(header, data_to_save, experiment_name, exp_conditions,
     ws.merge_cells('A3:K5')
     ws.cell('A3').value = exp_conditions
     # Freeze header
-    my_cell = ws['B7']
-    ws.freeze_panes = my_cell
-    # Write in spreadsheet the headboard.
+    ws.freeze_panes = ws['B7']
+    # Write in the spreadsheet the header.
     rows, cols = data_to_save.shape
-    for col in range (cols):
+    for col in range(cols):
         ws.cell(column=col+1, row=6, value=header[col])
         ws.cell(column=col+1, row=6).alignment = cell_formats['right_al']
         ws.cell(column=col+1, row=6).font = cell_formats['white_ft']
         ws.cell(column=col+1, row=6).fill = cell_formats['blue_fill']
         ws.cell(column=col+1, row=6).border = cell_formats['thick_bd']
-    # Write in spreadsheet the data.
-    for row in range(0, rows):
-        for col in range(0, cols):
-            element = float(data_to_save[row,col])
+    # Write in the spreadsheet the data.
+    for row in range(rows):
+        for col in range(cols):
+            element = float(data_to_save[row, col])
             cell = ws.cell(column=col+1, row=row+7, value=element)
             cell.number_format = '0.00'
             # Different fill color to consecutive rows.
@@ -159,11 +160,12 @@ def write_spreadsheet(header, data_to_save, experiment_name, exp_conditions,
             else:
                 ws.cell(column=col+1, row=row+7).fill = cell_formats[
                                                                    'white_fill']
+            # TODO set the dimensions only once,not every time inside for loop
             my_cell = ws.cell(column=col+1, row=row+7)
             ws.column_dimensions[my_cell.column].width = 10
-    # Writing and calculating statistics only if you save the analyzed data.
+    # Writing and calculating statistics only if save_analyzed is True.
     if save_analyzed:
-        # Write in spreadsheet statistics and average speeds.
+        # Write to spreadsheet statistics and average speeds.
         for row in range(rows+7, rows+13):
             #Format to statistics average speeds.
             ws.merge_cells(start_row=row, start_column=1, end_row=row,
@@ -207,95 +209,94 @@ def write_spreadsheet(header, data_to_save, experiment_name, exp_conditions,
                 cell.alignment = cell_formats['right_al']
         # Dynamic average speeds.
         ws.cell(column=11, row=rows+11,
-                value= '=1000*SQRT(((B{rowlastdata}-B7)^2)'
-                '+(((C{rowlastdata}-C7)^2)))/E{rowtime}\n'
-                ''.format(rowlastdata=rows+6, rowtime=rows+7))
-        ws.cell(column=11, row=rows+12, value= '=1000*(D{rowlastdata}-D7)'
-                '/E{rowtime}\n'.format(rowlastdata=rows+6, rowtotaltime=rows+7))
-    wb.save(name_spreadsheet)
-    return name_spreadsheet
+                value= '=1000*SQRT(((B{finalrow}-B7)^2)'
+                        '+(((C{finalrow}-C7)^2)))/E{rowtime}\n'
+                        ''.format(finalrow=rows+6, rowtime=rows+7))
+        ws.cell(column=11, row=rows+12, 
+                value= '=1000*(D{lastdata}-D7)/E{rowtime}\n'
+                       ''.format(lastdata=rows+6, rowtime=rows+7))
+    wb.save(spreadsheet_name)
+    return spreadsheet_name
 
-def save2master_xlsx(experiment_name, sp_left, sp_right, avg_lin_spd,
-                     avg_ang_spd):
+
+def save2master_xlsx(exp_name, sp_left, sp_right, avg_lin_spd, avg_ang_spd):
     """Save absolute linear and angular speeds in a master spreadsheet.
-    experiment.
 
-    :param str experiment_name: name of experiment realized.
+    :param str exp_name: name of experiment realized.
     :param int sp_left: left speed setpoint.
     :param int sp_right: right speed setpoint.
     :param float64 avg_lin_spd: average linear speed of UGV.
     :param float64 avg_ang_spd: average angular speed of UGV.
     """
     # Data search to save in masterspreadsheet.
-    proyect_dir = '\'file:///home/joslamasvarela/UviSpace/'
-    master_dir = 'uvispace/uvisensor/datatemp/'
+    master_dir = "file://{}{}".format(settings.parent_path, 
+                                      "/uvisensor/datatemp/")
     spreadsheet_ext= '.xlsx'
     name_sheet = '\'#$Sheet.'
     avg_spd_column = ​​'K'
 
     try:
-        wb = openpyxl.load_workbook('datatemp/{}.xlsx'.format(experiment_name))
-    except:
+        wb = openpyxl.load_workbook('datatemp/{}.xlsx'.format(exp_name))
+    except IOError:
         wb = openpyxl.Workbook()
     ws = wb.active
-    # Next empty row search.
+    # Search the next empty row.
     row = 7
     written_row = True
     while written_row:
         element = ws.cell(column=1, row=row).value
-        if element == None:
+        if element is None:
             written_row = False
         else:
-            row +=1
-    dynamic_data = (''.join([proyect_dir, master_dir, experiment_name, 
-                    spreadsheet_ext, name_sheet, avg_spd_column]))
+            row += 1
+    dynamic_data = ''.join([master_dir, exp_name, spreadsheet_ext, name_sheet,
+                            avg_spd_column])
     dynamic_avg_lin_spd = '{}{}'.format(dynamic_data, row)
     dynamic_avg_avg_spd = '{}{}'.format(dynamic_data, (row+1))
     # Save data in masterspreadsheet.
     try:
         wb = openpyxl.load_workbook("datatemp/masterfile.xlsx")
-    except:
+    except IOError:
         wb = openpyxl.Workbook()
     ws = wb.active
     # Freeze header
-    my_cell = ws['A2']
-    ws.freeze_panes = my_cell
-    # Next empty row search.
-    row = 1
+    ws.freeze_panes = ws['A2']
+    # Search the next empty row.
+    lastrow = 1
     written_row = True
     while written_row:
         element = ws.cell(column=1, row=row).value
         if element == None:
             written_row = False
         else:
-            row +=1
+            lastrow += 1
     # Save data in empty row.
-    ws.cell(column=1, row=row, value=experiment_name)
-    ws.cell(column=2, row=row, value=sp_left)
-    ws.cell(column=3, row=row, value=sp_right)
+    ws.cell(column=1, row=lastrow, value=exp_name)
+    ws.cell(column=2, row=lastrow, value=sp_left)
+    ws.cell(column=3, row=lastrow, value=sp_right)
     # This data can be consulted without having the files of the experiments.
-    ws.cell(column=4, row=row, value=avg_lin_spd)
-    ws.cell(column=5, row=row, value=avg_ang_spd)
+    ws.cell(column=4, row=lastrow, value=avg_lin_spd)
+    ws.cell(column=5, row=lastrow, value=avg_ang_spd)
     # Indirect average spds data.
-    ws.cell(column=6, row=row,
-            value= '=INDIRECT(H{})\n'.format(row)).number_format = '0.00'
-    ws.cell(column=7, row=row,
-            value= '=INDIRECT(I{})\n'.format(row)).number_format = '0.00'
+    ws.cell(column=6, row=lastrow,
+            value= '=INDIRECT(H{})\n'.format(lastrow)).number_format = '0.00'
+    ws.cell(column=7, row=lastrow,
+            value= '=INDIRECT(I{})\n'.format(lastrow)).number_format = '0.00'
     # Address cell to read
-    ws.cell(column=8, row=row, value=dynamic_avg_lin_spd)
-    ws.cell(column=9, row=row, value=dynamic_avg_avg_spd)
-    ws.cell(column=10, row=row, value="_")
+    ws.cell(column=8, row=lastrow, value=dynamic_avg_lin_spd)
+    ws.cell(column=9, row=lastrow, value=dynamic_avg_avg_spd)
+    ws.cell(column=10, row=lastrow, value="_")
     #Format data.
-    for y in range (1, 10):
-        my_cell = ws.cell(column=y, row=row)
-        if y == 1:
+    for col in range(1, 10):
+        my_cell = ws.cell(column=col, row=lastrow)
+        if col == 1:
             ws.column_dimensions[my_cell.column].width = 18
         else:
             ws.column_dimensions[my_cell.column].width = 10
-        if row % 2 != 0:
-            ws.cell(column=y, row=row).fill = cell_formats['skyblue_fill']
+        if lastrow % 2 != 0:
+            ws.cell(column=col, row=lastrow).fill = cell_formats['skyblue_fill']
         else:
-            ws.cell(column=y, row=row).fill = cell_formats['white_fill']
-        if y < 6:
-            ws.cell(column=y, row=row).alignment = cell_formats['right_al']
+            ws.cell(column=col, row=lastrow).fill = cell_formats['white_fill']
+        ws.cell(column=col, row=lastrow).alignment = cell_formats['right_al']
     wb.save("datatemp/masterfile.xlsx")
+    return
