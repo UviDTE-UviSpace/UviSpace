@@ -18,6 +18,8 @@ def main():
         arr = mat[:, :, 0:3]
         misc.imsave("image.png", arr)
 
+    s.send("quit\n")
+
 
 def recv_data(sck, size):
     recv_bytes = 0
