@@ -1,6 +1,12 @@
 #!/usr/bin/env python
 """Multithreading routine for controlling external FPGAs with cameras.
 
+Options
+-------
+
+- -s / --save2file: The data collected by the cameras will be stored in
+a spreadsheet and in a text file.
+
 The module creates several parallel threads, in order to optimize the
 execution time, as it contains several instructions which require
 waiting for external resources before continuing execution e.g. waiting
@@ -235,7 +241,7 @@ class DataFusionThread(threading.Thread):
 
     def __init__(self, triangles, ntriangles, conditions, inborders,
                  quadrant_limits, begin_events, end_event, reset_flags,
-                 save2file, name='Fusion Thread', ):
+                 save2file=False, name='Fusion Thread'):
         """
         Class constructor method
         """
@@ -422,16 +428,16 @@ class DataFusionThread(threading.Thread):
             # Allow to poll only during the remaining cycle time.
             polling_time = self.cycletime - (time.time()-cycle_start_time)
             # Subtract another amount of time for doing the other routines.
-            logger.info("polling {}s".format(polling_time))
+            logger.debug("polling {}s".format(polling_time))
             events = dict(self.poller.poll(polling_time))
             if (self.sockets['speed_subscriber'] in events
                     and events[self.sockets['speed_subscriber']] == zmq.POLLIN):
                 speeds = self.sockets['speed_subscriber'].recv_json()
-                logger.info("Received new speed set point: {}".format(speeds))
+                logger.debug("Received new speed set point: {}".format(speeds))
             else:
                 # Set speeds to None in order to ignore Kalman prediction step.
                 speeds = None
-                logger.info("Not received any speed set point from navigator")
+                logger.debug("Not received any speed set point from navigator")
             # Sleep the rest of the cycle.
             while (time.time() - cycle_start_time) < self.cycletime:
                 pass
@@ -493,8 +499,7 @@ def main():
     :return:
     """
     # Main routine
-    help_msg = ("Usage: multiplecamera.py [-s <save2file>],"
-                " [--save2file=<True/False>]")
+    help_msg = ("Usage: multiplecamera.py [-s / --save2file],")
     # This try/except clause forces to give the robot_id argument.
     try:
         opts, args = getopt.getopt(sys.argv[1:], "hs:", ["save="])
@@ -507,8 +512,10 @@ def main():
         if opt == '-h':
             print help_msg
             sys.exit()
-        elif opt in ("-s", "--save2file"):
-            save2file = bool(arg)
+        if opt in ("-s", "--save2file"):
+            save2file = True
+        else:
+            save2file = False
     logger.info("BEGINNING MAIN EXECUTION")
     # Get the relative path to all the config files stored in /config folder.
     conf_files = glob.glob("./resources/config/*.cfg")

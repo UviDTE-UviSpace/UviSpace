@@ -287,10 +287,10 @@ class DataAnalyzer(object):
         for value in data_master:
             if value == exp_name:
                 #TODO use '.format' string construction style
-                text = "{:>9}\t".format(value)
+                text = "{:>9}".format(value)
             else:
                 value = float(value)
-                text = '{}\t\t{}\t'.format(text, value)
+                text = '{}\t\t{}'.format(text, value)
         text = '{}\n'.format(text)
         with open("datatemp/masterfile.txt", 'a') as outfile:
             outfile.write(text)
