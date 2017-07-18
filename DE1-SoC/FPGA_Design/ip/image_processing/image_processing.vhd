@@ -126,9 +126,9 @@ architecture arch of image_processing is
                 clk             => clock,
                 reset_n         => reset_n,
                 -- Data input
-                hue          => hsv_out_hue,
-                saturation   => hsv_out_saturation,
-                brightness   => hsv_out_brightness,
+                hue             => hsv_out_hue,
+                saturation      => hsv_out_saturation,
+                brightness      => hsv_out_brightness,
                 hue_l_threshold => hue_l_threshold,
                 hue_h_threshold => hue_h_threshold,
                 sat_threshold   => sat_threshold,

@@ -1,6 +1,7 @@
 /*
-RGB to HSV module
------------------
+------------------------------------------------------------------
+   rgb2hsv component
+------------------------------------------------------------------
 
 This module convert the RGB values of the input to its HSV.
 
@@ -398,10 +399,10 @@ module rgb2hsv(
             max_value[7:0] <= max_value5[7:0];
             hue[18:0] <= (85 * hue5);
             if (max_value5 == 0) begin
-                saturation[7:0] = 0;
+                saturation[7:0] = 8'd0;
             end
             else begin
-                saturation[7:0] = dif5 / max_value5;
+                saturation[7:0] = 255 * dif5 / max_value5;
             end
         end
         else begin 
@@ -413,6 +414,7 @@ module rgb2hsv(
             done <= 1'b0;
             max_value[7:0] <= 8'd0;
             hue[18:0] <= 19'd0;
+            saturation [7:0] <= 8'd0;
         end
     end
     assign out_valid = valid;

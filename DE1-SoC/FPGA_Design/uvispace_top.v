@@ -481,10 +481,10 @@ image_processing img_proc(
   wire  [7:0] binarized_8bit;
   // Test values
   assign binarized_8bit = binarized ? 8'd255 : 8'd0;
-  assign lower_hue = 8'd90;
-  assign higher_hue = 8'd130;
-  assign saturation_level = 8'd51;
-  assign brigthness_level = 8'd51;
+  assign lower_hue = 8'd220;
+  assign higher_hue = 8'd30;
+  assign saturation_level = 8'd60;
+  assign brigthness_level = 8'd60;
 
   
 // image_capture: save RGB and Hue into HPS memory

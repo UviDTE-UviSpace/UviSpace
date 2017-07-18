@@ -53,7 +53,7 @@ begin
             out_valid <= '0';
         else
             if (saturation>sat_threshold) and (brightness>bri_threshold)
-                    and (hue>hue_l_threshold) and (hue<hue_h_threshold) then
+                    and ((hue>hue_l_threshold) or (hue<hue_h_threshold)) then
                 out_bin <= '1';
             else
                 out_bin <= '0';
