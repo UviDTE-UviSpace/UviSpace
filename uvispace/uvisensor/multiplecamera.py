@@ -7,6 +7,8 @@ Options
 - -s / --save2file: The data collected by the cameras will be stored in
 a spreadsheet and in a text file.
 
+------------------------------------------------------------------------
+
 The module creates several parallel threads, in order to optimize the
 execution time, as it contains several instructions which require
 waiting for external resources before continuing execution e.g. waiting
