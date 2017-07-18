@@ -1,5 +1,13 @@
 #!/usr/bin/env python
-"""Auxiliary program for controlling the UGV movements through keyboard"""
+"""
+Auxiliary program for controlling the UGV movements through keyboard.
+
+The module makes a reading of the keyboard, and sends the movement
+chosen by the user.
+
+For the correct operation of the module, it is necessary that the
+keyboard delay in the operating system is less than 250 ms.
+"""
 # Standard libraries
 import ast
 import ConfigParser

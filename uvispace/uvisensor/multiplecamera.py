@@ -1,6 +1,14 @@
 #!/usr/bin/env python
 """Multithreading routine for controlling external FPGAs with cameras.
 
+Options
+-------
+
+- -s / --save2file: The data collected by the cameras will be stored in
+a spreadsheet and in a text file.
+
+------------------------------------------------------------------------
+
 The module creates several parallel threads, in order to optimize the
 execution time, as it contains several instructions which require
 waiting for external resources before continuing execution e.g. waiting
@@ -21,6 +29,7 @@ have to be reset.
 """
 # Standard libraries
 import copy
+import getopt
 import glob
 import logging
 import os
@@ -32,6 +41,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import zmq
 # Local libraries
+from resources import dataprocessing
 import kalmanfilter
 import videosensor
 
@@ -233,7 +243,7 @@ class DataFusionThread(threading.Thread):
 
     def __init__(self, triangles, ntriangles, conditions, inborders,
                  quadrant_limits, begin_events, end_event, reset_flags,
-                 name='Fusion Thread'):
+                 save2file=False, name='Fusion Thread'):
         """
         Class constructor method
         """
@@ -272,17 +282,25 @@ class DataFusionThread(threading.Thread):
         self._ntriangles = copy.copy(self.ntriangles)
         self._inborders = copy.copy(self.inborders)
         self._reset_flags = copy.copy(self.reset_flags)
+        # Array to save historic poses values. Initial values set to 0.
+        self.data_hist = np.array([0., 0., 0., 0.]).reshape(1,4)
+        # Variable containing the initial reference time.
+        self.initial_time = 0
         # Kalman filter instance with 3 variables (x, y, theta)
         # and 2 inputs (linear and angular speeds).
         self.kalman = kalmanfilter.Kalman(var_dim=3, input_dim=2)
         # Set the process noise, calculated empirically. units = (mm, mm, rad)^2
         self.kalman.set_prediction_noise((3.5**2, 3.5**2, 0.015**2))
+        # Boolean to save data in spreadsheet and file text.
+        self.save2file = save2file
 
     def run(self):
         """Main routine of the DataFusionThread."""
         # Wait until all cameras are initialized
         for event in self.begin_events:
             event.wait()
+        # Set the reference time at this point.
+        self.initial_time = time.time()
         triangle = []
         speeds = None
         publish_time = None
@@ -394,6 +412,13 @@ class DataFusionThread(threading.Thread):
             else:
                 camera_noise = (1000**2, 1000**2, 2*np.pi**2)
             self.kalman.set_measurement_noise(camera_noise)
+            # Time since first triangle, in milliseconds.
+            diff_time = (time.time()-self.initial_time) * 1000
+            # Temporary array to save time and pose in meters.
+            new_data = np.array([diff_time, pose[0], pose[1],
+                                 pose[2]]).astype(np.float64)
+            # Matrix of floats to save data.
+            self.data_hist = np.vstack((self.data_hist, new_data))
             pose_array = np.array(pose).reshape(3,1)
             new_state, _ = self.kalman.update(pose_array)
             pose_list = new_state.reshape(3).tolist()
@@ -405,7 +430,7 @@ class DataFusionThread(threading.Thread):
             # Allow to poll only during the remaining cycle time.
             polling_time = self.cycletime - (time.time()-cycle_start_time)
             # Subtract another amount of time for doing the other routines.
-            polling_time -= 0.005
+            logger.debug("polling {}s".format(polling_time))
             events = dict(self.poller.poll(polling_time))
             if (self.sockets['speed_subscriber'] in events
                     and events[self.sockets['speed_subscriber']] == zmq.POLLIN):
@@ -418,7 +443,13 @@ class DataFusionThread(threading.Thread):
             # Sleep the rest of the cycle.
             while (time.time() - cycle_start_time) < self.cycletime:
                 pass
-        # Clean up resources
+        if self.save2file:
+            # Delete first row data (row of zeros).
+            self.data_hist = self.data_hist[1:, :]
+            # Save historic data containing poses and times.
+            dataprocessing.process_data(self.data_hist, save_analyzed=True,
+                                        save2master=True)
+        # Cleanup resources
         for socket in self.sockets:
             self.sockets[socket].close()
         return
@@ -469,6 +500,24 @@ def main():
     Read configuration files, initialize variables and set up threads.
     :return:
     """
+    # Main routine
+    help_msg = ("Usage: multiplecamera.py [-s / --save2file],")
+    # This try/except clause forces to give the robot_id argument.
+    try:
+        opts, args = getopt.getopt(sys.argv[1:], "hs:", ["save="])
+    except getopt.GetoptError:
+        print(help_msg)
+    if not opts:
+        print help_msg
+        sys.exit()
+    for opt, arg in opts:
+        if opt == '-h':
+            print help_msg
+            sys.exit()
+        if opt in ("-s", "--save2file"):
+            save2file = True
+        else:
+            save2file = False
     logger.info("BEGINNING MAIN EXECUTION")
     # Get the relative path to all the config files stored in /config folder.
     conf_files = glob.glob("./resources/config/*.cfg")
@@ -503,7 +552,7 @@ def main():
     # Thread for merging the data obtained at every CameraThread.
     threads.append(DataFusionThread(triangles, ntriangles, conditions,
                                     inborders, quadrant_limits, begin_events,
-                                    end_event, reset_flags))
+                                    end_event, reset_flags, save2file))
     # Thread for getting user input.
     threads.append(UserThread(begin_events, end_event))
     # start threads

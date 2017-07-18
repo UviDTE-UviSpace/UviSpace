@@ -51,8 +51,7 @@ class RobotController(object):
         self.QCTracker = path_tracker.QuadCurveTracker()
         # Load the config file and read the polynomial coeficients
         self.conf = ConfigParser.ConfigParser()
-        self.conf_file = glob.glob(
-                        "./resources/config/robot{}.cfg".format(self.robot_id))
+        self.conf_file = glob.glob("./config/robot{}.cfg".format(self.robot_id))
         self.conf.read(self.conf_file)
         self._coefs_left = ast.literal_eval(self.conf.get('Coefficients',
                                                           'coefs_left'))

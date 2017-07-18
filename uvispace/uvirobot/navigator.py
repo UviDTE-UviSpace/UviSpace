@@ -130,10 +130,14 @@ def main():
         if opt == '-h':
             print help_msg
             sys.exit()
-        if opt in ("-r", "--robotid"):
-            robot_id = int(arg)
-        if opt == "--rectangle":
-            rectangle_path = True
+        else:
+            if opt in ("-r", "--robotid"):
+                robot_id = int(arg)
+            else:
+                print help_msg
+                sys.exit()
+            if opt == "--rectangle":
+                rectangle_path = True
     # Calls the main function
     my_robot = RobotController(robot_id)
 
