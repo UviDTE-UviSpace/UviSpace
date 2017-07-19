@@ -100,12 +100,11 @@ def main():
     conf = ConfigParser.ConfigParser()
     conf_file = glob.glob("./config/robot{}.cfg".format(robot_id))
     conf.read(conf_file)
-    coefs_left = ast.literal_eval(conf.get('Coefficients', 'coefs_left'))
-    coefs_right = ast.literal_eval(conf.get('Coefficients', 'coefs_right'))
+    coefs_left = ast.literal_eval(conf.get('Coefficients_fwd', 'coefs_left'))
+    coefs_right = ast.literal_eval(conf.get('Coefficients_fwd', 'coefs_right'))
     # Send the coeficients to the polynomial solver objects.
-    speed.poly_solver_left.update_coefs(coefs_left)
-    speed.poly_solver_right.update_coefs(coefs_right)
-    # import pdb; pdb.set_trace()
+    speed.poly_sol_left_fwd.update_coefs(coefs_left)
+    speed.poly_sol_right_fwd.update_coefs(coefs_right)
     # instructions for moving the UGV.
     print ('\n\r'
            'Teleoperation program initialized. Available commands:\n\r'
@@ -128,39 +127,39 @@ def main():
         # Move forward.
         if key in ('w', 'W'):
             screen_message = 'moving forward'
-            speed_message['sp_left'] = speed.poly_solver_left.solve(400, 0)
-            speed_message['sp_right'] = speed.poly_solver_right.solve(400, 0)
+            speed_message['sp_left'] = speed.poly_sol_left_fwd.solve(400, 0)
+            speed_message['sp_right'] = speed.poly_sol_right_fwd.solve(400, 0)
             speed_publisher.send_json(speed_message)
         # Move backwards.
         elif key in ('s', 'S'):
             screen_message = 'moving backwards'
-            speed_message['sp_left'] = speed.poly_solver_left.solve(-200, 0)
-            speed_message['sp_right'] = speed.poly_solver_right.solve(-200, 0)
+            speed_message['sp_left'] = speed.poly_sol_left_fwd.solve(-200, 0)
+            speed_message['sp_right'] = speed.poly_sol_right_fwd.solve(-200, 0)
             speed_publisher.send_json(speed_message)
         # Move left.
         elif key in ('a', 'A'):
             screen_message = 'moving left'
-            speed_message['sp_left'] = speed.poly_solver_left.solve(200, 1)
-            speed_message['sp_right'] = speed.poly_solver_right.solve(200, 1)
+            speed_message['sp_left'] = speed.poly_sol_left_fwd.solve(200, 1)
+            speed_message['sp_right'] = speed.poly_sol_right_fwd.solve(200, 1)
             speed_publisher.send_json(speed_message)
         # Move right.
         elif key in ('d', 'D'):
             screen_message = 'moving right'
-            speed_message['sp_left'] = speed.poly_solver_left.solve(200, -1)
-            speed_message['sp_right'] = speed.poly_solver_right.solve(200, -1)
+            speed_message['sp_left'] = speed.poly_sol_left_fwd.solve(200, -1)
+            speed_message['sp_right'] = speed.poly_sol_right_fwd.solve(200, -1)
             speed_publisher.send_json(speed_message)
         # Stop moving and exit.
         elif key in ('q', 'Q'):
             print ('Stop and exiting program. Have a good day! =)')
-            speed_message['sp_left'] = speed.poly_solver_left.solve(0, 0)
-            speed_message['sp_right'] = speed.poly_solver_right.solve(0, 0)
+            speed_message['sp_left'] = speed.poly_sol_left_fwd.solve(0, 0)
+            speed_message['sp_right'] = speed.poly_sol_right_fwd.solve(0, 0)
             speed_publisher.send_json(speed_message)
             break
         # Stop moving.
         else:
             screen_message = 'stop moving'
-            speed_message['sp_left'] = speed.poly_solver_left.solve(0, 0)
-            speed_message['sp_right'] = speed.poly_solver_right.solve(0, 0)
+            speed_message['sp_left'] = speed.poly_sol_left_fwd.solve(0, 0)
+            speed_message['sp_right'] = speed.poly_sol_right_fwd.solve(0, 0)
             speed_publisher.send_json(speed_message)
         # if key pressed now and key pressed previously are different,
         # update message

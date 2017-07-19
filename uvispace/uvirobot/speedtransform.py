@@ -39,8 +39,8 @@ class PolySpeedSolver(object):
     equation of two variables in the second degree is solved to obtain
     the speed setpoint from the desired linear and angular speeds.
 
-    :param coefs: coefficients of the second degree polynomial.
-    :type coefs: tuple(6 elemens float).
+    :param coefs_fwd: coefficients of the second degree polynomial.
+    :type coefs_fwd: tuple(6 elemens float).
     :param int sp: speed setpoint.
     :param thresholds: speed setpoint thresholds.
     :type thresholds tuple (3 elements int).
@@ -72,11 +72,13 @@ class PolySpeedSolver(object):
         """
         # Solve the poly function as a outer product between the coeficients and
         # the independent variables.
+        # Format the obtained value to the UGV setpoints scale.
         variables = [1, linear, angular, linear**2, linear*angular, angular**2]
         sp = np.dot(np.array(self._coefs), np.array(variables).reshape(6, 1))
-        # Format the obtained value to the UGV setpoints scale.
-        if linear > 0:
+        if linear > 60 :
             self.sp = np.clip(int(sp), self.thresholds[1], self.thresholds[2])
+        elif linear > 0:
+            self.sp = np.clip(int(sp), self.thresholds[0], self.thresholds[2])
         elif linear == 0 and angular == 0:
             self.sp = 127
         else:
@@ -89,7 +91,7 @@ class PolySpeedSolver(object):
         :param coefs: coefficients of the second degree polynomial.
         :type coefs: tuple(6 elements float).
         :return: updated coefficients of a polynomial.
-        :rtype: tuple(6 elemens float)        
+        :rtype: tuple(6 elemens float)
         """
         self._coefs = coefs
         return self._coefs
@@ -131,9 +133,12 @@ class Speed(object):
         # attributes.
         self._scale = self._set_scale(scale)
         self.set_speed(speed, spd_format)
-        #
-        self.poly_solver_left = PolySpeedSolver()
-        self.poly_solver_right = PolySpeedSolver()
+        # Solves equations with different coefficients. Coefficients depends on
+        # direction (forward or backward) or turn itself.
+        self.poly_sol_left_fwd = PolySpeedSolver()
+        self.poly_sol_right_fwd = PolySpeedSolver()
+        self.poly_sol_left_turn = PolySpeedSolver()
+        self.poly_sol_right_turn = PolySpeedSolver()
 
     def set_speed(self, speed, speed_format, speed_scale='linear'):
         """Set a new speed value.

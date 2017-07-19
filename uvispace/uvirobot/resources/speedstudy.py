@@ -55,13 +55,13 @@ def main():
                 sys.exit()
     # Create an instance of SerMesProtocol and check connection to port.
     my_serial = messenger.connect_and_check(robot_id)
-    my_robot = RobotController(robot_id)
+    # my_robot = RobotController(robot_id)
     if mode == 'lin_ang':
         # Equation degrees linear velocity 2 and angular velocity 2.
-        left_solver = PolySpeedSolver(coefs=(117.1, 0.334, 36.02, 0.00002422,
-                                             -0.4208, 22.21))
-        right_solver = PolySpeedSolver(coefs=(141, 0.0902, -94.88, 0.0004565,
-                                              0.6557, 22.59))
+        left_solver = PolySpeedSolver(coefs=(120.5, -0.2614, -93.01, 0.,
+                                             0.8996, 11.93))
+        right_solver = PolySpeedSolver(coefs=(134.5, 0.2614, 93.01, 0.,
+                                              -0.8996, -11.93))
         #TODO Check correct values
         linear = float(raw_input("Enter the linear speed value\n"))
         angular = float(raw_input("Enter the angular speed value\n"))

@@ -35,16 +35,18 @@ logger = logging.getLogger('navigator')
 def make_a_rectangle(my_robot):
     """Set the robot path to a rectangle of fixed vertices."""
     logger.info("Creating rectangle path")
-    point_a = {'x': 1000, 'y': 1000}
-    point_b = {'x': -1000, 'y': 1000}
-    point_c = {'x': -1000, 'y': -1000}
-    point_d = {'x': 1000, 'y': -1000}
-    point_e = {'x': 1000, 'y': 0}
+    # point_a = {'x': 1000, 'y': 1000}
+    # point_b = {'x': -1000, 'y': 1000}
+    # point_c = {'x': -1000, 'y': -1000}
+    # point_d = {'x': 1000, 'y': -1000}
+    point_a = {'x': -750, 'y': -600}
+    point_b = {'x': -750, 'y': 700}
+    point_c = {'x': -1400, 'y': 700}
+    point_d = {'x': -1400, 'y': -600}
     my_robot.new_goal(point_a)
     my_robot.new_goal(point_b)
     my_robot.new_goal(point_c)
     my_robot.new_goal(point_d)
-    my_robot.new_goal(point_e)
     return
 
 
@@ -138,6 +140,8 @@ def main():
                 sys.exit()
             if opt == "--rectangle":
                 rectangle_path = True
+    #TODO FIX!
+    rectangle_path = True
     # Calls the main function
     my_robot = RobotController(robot_id)
 
@@ -162,6 +166,8 @@ def main():
     if rectangle_path:
         make_a_rectangle(my_robot)
 
+
+
     # Listen sockets
     listen_sockets(sockets, my_robot)
     # Once the run flag has been set to False, shutdown
@@ -170,15 +176,16 @@ def main():
     for socket in sockets:
         sockets[socket].close()
     # Plot results
-    if my_robot.QCTracker.path is not None:
-        # Print the log output to files and plot it
-        script_path = os.path.dirname(os.path.realpath(__file__))
-        # A file identifier is generated from the current time value
-        file_id = time.strftime('%Y%m%d_%H%M')
-        with open('{}/tmp/path_{}.log'.format(script_path, file_id), 'a') as f:
-            np.savetxt(f, my_robot.QCTracker.route, fmt='%.2f')
-        # Plots the robot ideal path.
-        plotter.path_plot(my_robot.QCTracker.path, my_robot.QCTracker.route)
+    ##TODO Necesary adapt this function to the new path tracker.
+    # if my_robot.QCTracker.path is not None:
+    #     # Print the log output to files and plot it
+    #     script_path = os.path.dirname(os.path.realpath(__file__))
+    #     # A file identifier is generated from the current time value
+    #     file_id = time.strftime('%Y%m%d_%H%M')
+    #     with open('{}/tmp/path_{}.log'.format(script_path, file_id), 'a') as f:
+    #         np.savetxt(f, my_robot.QCTracker.route, fmt='%.2f')
+    #     # Plots the robot ideal path.
+    #     plotter.path_plot(my_robot.QCTracker.path, my_robot.QCTracker.route)
 
     return
 

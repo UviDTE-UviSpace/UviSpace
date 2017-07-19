@@ -15,6 +15,7 @@ import logging
 import os
 import sys
 # Third party libraries
+import numpy as np
 import zmq
 # Local libraries
 import path_tracker
@@ -48,23 +49,39 @@ class RobotController(object):
             'sp_left': 127,
             'sp_right': 127,
         }
-        self.QCTracker = path_tracker.QuadCurveTracker()
+        # Array with goals.
+        self.goal_points = None
+        # Angle between target UGV.
+        self.beta = 0
+        # Distance between target UGV.
+        self.distance = 0
+        # Angle error permited, in grades.
+        self.angle = 25
         # Load the config file and read the polynomial coeficients
         self.conf = ConfigParser.ConfigParser()
-        self.conf_file = glob.glob("./config/robot{}.cfg".format(self.robot_id))
+        self.conf_file = glob.glob("./resources/config/robot{}.cfg"
+                                   .format(self.robot_id))
         self.conf.read(self.conf_file)
-        self._coefs_left = ast.literal_eval(self.conf.get('Coefficients',
-                                                          'coefs_left'))
-        self._coefs_right = ast.literal_eval(self.conf.get('Coefficients',
-                                                           'coefs_right'))
+        self._coefs_left_fwd = ast.literal_eval(self.conf.get(
+                                              'Coefficients_fwd', 'coefs_left'))
+        self._coefs_right_fwd = ast.literal_eval(self.conf.get(
+                                             'Coefficients_fwd', 'coefs_right'))
+        self._coefs_left_turn = ast.literal_eval(self.conf.get(
+                                             'Coefficients_turn', 'coefs_left'))
+        self._coefs_right_turn = ast.literal_eval(self.conf.get(
+                                            'Coefficients_turn', 'coefs_right'))
         # Send the coeficients to the polynomial solver objects
         self.robot_speed = Speed()
-        self.robot_speed.poly_solver_left.update_coefs(self._coefs_left)
-        self.robot_speed.poly_solver_right.update_coefs(self._coefs_right)
+        self.robot_speed.poly_sol_left_fwd.update_coefs(self._coefs_left_fwd)
+        self.robot_speed.poly_sol_right_fwd.update_coefs(self._coefs_right_fwd)
+        self.robot_speed.poly_sol_left_turn.update_coefs(self._coefs_left_turn)
+        self.robot_speed.poly_sol_right_turn.update_coefs(
+                                                         self._coefs_right_turn)
         # Publishing socket instantiation.
         self.speed_publisher = zmq.Context.instance().socket(zmq.PUB)
         self.speed_publisher.bind("tcp://*:{}".format(
                 int(os.environ.get("UVISPACE_BASE_PORT_SPEED"))+robot_id))
+        self.first = True
 
     def set_speed(self, pose):
         """Receive a new pose and calculate a speed value.
@@ -77,17 +94,46 @@ class RobotController(object):
         :type pose: dict
         """
         if not self.init:
-            self.QCTracker.append_point((pose['x'], pose['y']))
             self.init = True
-        linear, angular = self.QCTracker.run(
-                pose['x'], pose['y'], pose['theta'])
-        self.robot_speed.set_speed([linear, angular], 'linear_angular')
-        logger.info('Pose--> X: {:1.4f}, Y: {:1.4f}, theta: {:1.4f} - '
-                    'Speeds--> Linear: {:4.2f}, Angular {:4.2f}, Step {}'
-                    .format(pose['x'], pose['y'], pose['theta'], linear,
-                            angular, pose['step']))
-        sp_left, sp_right = self.get_setpoints(linear, angular)
-        self.publish_message(pose['step'], linear, angular, sp_left, sp_right)
+        else:
+            current_point = (pose['x'], pose['y'])
+            # Calculate the angle between target UGV.
+            self.beta = path_tracker.target_angle(current_point,
+                                                  self.goal_points)
+            # Change range of angle UGV: (-pi, pi)->(0, 2*pi).
+            if pose['theta'] < 0:
+                self.theta = pose['theta'] + 2 * np.pi
+            else:
+                self.theta = pose['theta']
+            # Change UGV orientation.
+            if ((np.abs(self.beta - self.theta)) >
+                np.abs(self.angle * np.pi / 180)):
+                linear, angular = self.match_orientation(self.beta, self.theta)
+            else:
+                next_point = self.goal_points[0, :]
+                self.distance = path_tracker.target_dist(next_point,
+                                                         current_point)
+                linear, angular = path_tracker.lin_ang_values(self.distance)
+                if (linear == 0 and angular == 0):
+                    self.goal_points = path_tracker.delete_point(
+                                                               self.goal_points)
+            self.robot_speed.set_speed([linear, angular], 'linear_angular')
+            logger.info('Pose--> X: {:1.4f}, Y: {:1.4f}, theta: {:1.4f} - '
+                        'Speeds--> Linear: {:4.2f}, Angular {:4.2f}, Step {}'
+                        .format(pose['x'], pose['y'], pose['theta'], linear,
+                                angular, pose['step']))
+            # Temporary.
+            print 'goal: {}'.format(self.goal_points[0, :])
+            print 'goals: {}'.format(self.goal_points)
+            print 'distance: {}'.format(self.distance)
+            print 'beta: {}'.format(self.beta)
+            print 'theta: {}'.format(self.theta)
+            a = np.abs(self.beta - self.theta)
+            print 'diff_angle: {}'.format(a)
+            print 'linear: {}'.format(linear)
+            print 'angular: {}'.format(angular)
+            sp_left, sp_right = self.get_setpoints(linear, angular)
+            self.publish_message(pose['step'], linear, angular, sp_left, sp_right)
         return
 
     def get_setpoints(self, linear, angular):
@@ -97,8 +143,14 @@ class RobotController(object):
         :param float angular: angular speed value.
         """
         # Get the right and left speeds in case of direct movement
-        sp_left = self.robot_speed.poly_solver_left.solve(linear, angular)
-        sp_right = self.robot_speed.poly_solver_right.solve(linear, angular)
+        if linear > 60:
+            sp_left = self.robot_speed.poly_sol_left_fwd.solve(linear, angular)
+            sp_right = self.robot_speed.poly_sol_right_fwd.solve(linear,
+                                                                        angular)
+        else:
+            sp_left = self.robot_speed.poly_sol_left_turn.solve(linear, angular)
+            sp_right = self.robot_speed.poly_sol_right_turn.solve(linear,
+                                                                        angular)
         return (sp_left, sp_right)
 
     def publish_message(self, step, linear, angular, sp_left, sp_right):
@@ -129,7 +181,10 @@ class RobotController(object):
             goal_point = (goal['x'], goal['y'])
             # Adds the new goal to the current path, calculating all the
             # intermediate points and stacking them to the path array
-            self.QCTracker.append_point(goal_point)
+            if self.goal_points == None:
+                self.goal_points = goal_point
+            else:
+                self.goal_points = np.vstack([self.goal_points, goal_point])
             logger.info('New goal--> X: {}, Y: {}'
                         .format(goal['x'], goal['y']))
         else:
