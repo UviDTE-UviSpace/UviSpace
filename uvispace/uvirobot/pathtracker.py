@@ -6,7 +6,7 @@
 import numpy as np
 
 def target_angle(current_point, goal_points):
-    if not (goal_points == None):
+    if not goal_points.all() == None:
         segment = goal_points[0, :] - current_point
         beta = np.arctan(segment[1]/segment[0])
         print segment
@@ -39,13 +39,15 @@ def match_orientation(beta, theta):
         angular = 0.6
     if beta < theta:
         linear = 20
-        angular = -0.6
-
+        angular = -0.7
+    if ((beta < (45 * np.pi / 180)) or (beta > (315 * np.pi / 180))):
+        linear = 20
+        angular = 0.6
     return (linear, angular)
 
 def lin_ang_values(distance):
     if distance > 200:
-        linear = 200
+        linear = 220
         angular = 0
     elif distance > 70:
         linear = 140
@@ -58,10 +60,10 @@ def lin_ang_values(distance):
 
 def delete_point(goal_points):
     work_goal_points = goal_points
-    if work_goal_points == None:
+    if work_goal_points.all() == None:
         pass
-    if work_goal_points.shape[0] == 1:
-        work_goal_points = None
+    elif work_goal_points.shape[0] == 1:
+        work_goal_points = np.array([None, None]).reshape(1,2)
     else:
         work_goal_points = work_goal_points[1:, :]
 
@@ -72,8 +74,8 @@ def delete_point(goal_points):
 def main():
     # Test angle:
     # Inicialitation points
-    read_point = {'x': 0, 'y': 0, 'theta': 0.0}
-    goal_point0 = np.array([1, 1])
+    read_point = {'x': -1457.0131, 'y': -561.3432, 'theta': -0.7312}
+    goal_point0 = np.array([-750, -600])
     goal_point1 = np.array([1, 0])
     goal_point2= np.array([0, 1])
     goal_point3 = np.array([-1, 1])

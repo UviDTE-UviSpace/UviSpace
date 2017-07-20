@@ -39,14 +39,17 @@ def make_a_rectangle(my_robot):
     # point_b = {'x': -1000, 'y': 1000}
     # point_c = {'x': -1000, 'y': -1000}
     # point_d = {'x': 1000, 'y': -1000}
+    point_e = {'x': 750, 'y': -600}
     point_a = {'x': -750, 'y': -600}
     point_b = {'x': -750, 'y': 700}
     point_c = {'x': -1400, 'y': 700}
     point_d = {'x': -1400, 'y': -600}
+    my_robot.new_goal(point_e)
     my_robot.new_goal(point_a)
     my_robot.new_goal(point_b)
     my_robot.new_goal(point_c)
     my_robot.new_goal(point_d)
+    my_robot.new_goal(point_a)
     return
 
 

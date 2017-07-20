@@ -18,7 +18,7 @@ import sys
 import numpy as np
 import zmq
 # Local libraries
-import path_tracker
+import pathtracker
 from speedtransform import Speed
 
 try:
@@ -50,13 +50,13 @@ class RobotController(object):
             'sp_right': 127,
         }
         # Array with goals.
-        self.goal_points = None
+        self.goal_points = np.array([None, None]).reshape(1,2)
         # Angle between target UGV.
         self.beta = 0
         # Distance between target UGV.
         self.distance = 0
         # Angle error permited, in grades.
-        self.angle = 25
+        self.angle = 15
         # Load the config file and read the polynomial coeficients
         self.conf = ConfigParser.ConfigParser()
         self.conf_file = glob.glob("./resources/config/robot{}.cfg"
@@ -95,10 +95,10 @@ class RobotController(object):
         """
         if not self.init:
             self.init = True
-        else:
+        elif not self.goal_points.all() == None:
             current_point = (pose['x'], pose['y'])
             # Calculate the angle between target UGV.
-            self.beta = path_tracker.target_angle(current_point,
+            self.beta = pathtracker.target_angle(current_point,
                                                   self.goal_points)
             # Change range of angle UGV: (-pi, pi)->(0, 2*pi).
             if pose['theta'] < 0:
@@ -108,14 +108,15 @@ class RobotController(object):
             # Change UGV orientation.
             if ((np.abs(self.beta - self.theta)) >
                 np.abs(self.angle * np.pi / 180)):
-                linear, angular = self.match_orientation(self.beta, self.theta)
+                linear, angular = pathtracker.match_orientation(self.beta,
+                                                                    self.theta)
             else:
                 next_point = self.goal_points[0, :]
-                self.distance = path_tracker.target_dist(next_point,
+                self.distance = pathtracker.target_dist(next_point,
                                                          current_point)
-                linear, angular = path_tracker.lin_ang_values(self.distance)
+                linear, angular = pathtracker.lin_ang_values(self.distance)
                 if (linear == 0 and angular == 0):
-                    self.goal_points = path_tracker.delete_point(
+                    self.goal_points = pathtracker.delete_point(
                                                                self.goal_points)
             self.robot_speed.set_speed([linear, angular], 'linear_angular')
             logger.info('Pose--> X: {:1.4f}, Y: {:1.4f}, theta: {:1.4f} - '
@@ -134,6 +135,9 @@ class RobotController(object):
             print 'angular: {}'.format(angular)
             sp_left, sp_right = self.get_setpoints(linear, angular)
             self.publish_message(pose['step'], linear, angular, sp_left, sp_right)
+        else:
+            sp_left, sp_right = self.get_setpoints(0, 0)
+            print 'Waiting for a pose...'
         return
 
     def get_setpoints(self, linear, angular):
@@ -181,8 +185,8 @@ class RobotController(object):
             goal_point = (goal['x'], goal['y'])
             # Adds the new goal to the current path, calculating all the
             # intermediate points and stacking them to the path array
-            if self.goal_points == None:
-                self.goal_points = goal_point
+            if self.goal_points.all() == None:
+                self.goal_points = np.array([goal_point]).reshape(1,2)
             else:
                 self.goal_points = np.vstack([self.goal_points, goal_point])
             logger.info('New goal--> X: {}, Y: {}'
