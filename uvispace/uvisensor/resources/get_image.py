@@ -1,27 +1,34 @@
-import socket
-import pylab
+#!/usr/bin/env python
+"""
+Auxiliar module for obtaining an image from a Localization Node.
+
+The localization node can be accessed through TCP/IP.
+"""
+import numpy as np
 from scipy import misc
+import socket
 
 
 def main():
-    s = socket.socket(family=socket.AF_INET, type=socket.SOCK_STREAM)
+    client = socket.socket(family=socket.AF_INET, type=socket.SOCK_STREAM)
     address = ("172.19.5.213", 36000)
-    s.connect(address)
-    s.send("capture_frame\n")
+    client.connect(address)
+    client.send("capture_frame\n")
     try:
-        message = recv_data(s, 480 * 640 * 4)
+        message = recv_data(client, 480*640*4)
     except socket.timeout:
         print("timeout")
     else:
-        mat = pylab.fromstring(message, dtype=pylab.uint8)
-        mat = mat.reshape((480, 640, 4))
-        arr = mat[:, :, 0:3]
-        misc.imsave("image.png", arr)
+        raw_array = np.fromstring(message, dtype=np.uint8)
+        raw_array = raw_array.reshape((480, 640, 4))
+        image_array = raw_array[:, :, 0:3]
+        misc.imsave("image.png", image_array)
 
-    s.send("quit\n")
+    client.send("quit\n")
 
 
 def recv_data(sck, size):
+    """Read the specified number of packages from the input socket."""
     recv_bytes = 0
     packages = []
     # Do not stop reading new packages until target 'size' is reached.

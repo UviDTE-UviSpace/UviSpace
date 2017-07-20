@@ -1,43 +1,55 @@
-import socket
-import pylab
-import cv2
-import time
-import logging
+#!/usr/bin/env python
+"""
+Auxiliar module for streaming images from a Localization Node.
 
-# Logging setup
-import settings
+The localization node can be accessed through TCP/IP.
+"""
+import cv2
+import logging
+import numpy as np
+import socket
+import time
+
+try:
+    # Logging setup.
+    import settings
+except ImportError:
+    # Exit program if the settings module can't be found.
+    sys.exit("Can't find settings module. Maybe environment variables are not"
+"set. Run the environment .sh script at the project root folder.")
 logger = logging.getLogger('sensor')
 
 
 def main():
     address = ("172.19.5.213", 36000)
-    s = socket.socket(family=socket.AF_INET, type=socket.SOCK_STREAM)
-    s.connect(address)
+    client = socket.socket(family=socket.AF_INET, type=socket.SOCK_STREAM)
+    client.connect(address)
 
     fourcc = cv2.VideoWriter_fourcc(*'XVID')
-    out = cv2.VideoWriter('output.avi', fourcc, 6.0, (640, 480))
+    videowriter = cv2.VideoWriter('output.avi', fourcc, 6.0, (640, 480))
 
-    for i in range(10000):
+    for frame in range(10000):
         try:
-            logger.info("Requesting frame {}".format(i))
-            s.send("capture_frame\n")
-            message = recv_data(s, 480 * 640 * 4)
+            logger.info("Requesting frame {}".format(frame))
+            client.send("capture_frame\n")
+            message = recv_data(client, 480*640*4)
         except socket.timeout:
             break
         except KeyboardInterrupt:
             break
         else:
             shape = (480, 640, 4)
-            mat = pylab.fromstring(message, dtype=pylab.uint8).reshape(shape)
-            image = mat[:, :, 0:3]
+            raw_array = np.fromstring(message, dtype=np.uint8).reshape(shape)
+            image = raw_array[:, :, 0:3]
             cv2.imshow('stream', image)
             cv2.waitKey(1)
-            out.write(image)
+            videowriter.write(image)
 
-    s.send("quit\n")
+    client.send("quit\n")
 
 
 def recv_data(sck, size):
+    """Read the specified number of packages from the input socket."""
     recv_bytes = 0
     packages = []
     count = 0
