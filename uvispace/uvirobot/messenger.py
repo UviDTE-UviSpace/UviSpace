@@ -139,13 +139,16 @@ def move_robot(data, my_serial, wait_times, speed_calc_times, xbee_times,
 def read_battery_soc(my_serial):
     """Send a petition to the slave for returning the battery SOC"""
     raw_soc = my_serial.get_soc()
-    if raw_soc is not None:
+    if raw_soc is None:
+        soc = 0
+        logger.warn("Unable to get the battery state of charge")
+    elif raw_soc == -1:
+        soc = 0
+        logger.warn("Fuel gauge PCB not detected")
+    else:
         # The soc variable are 4 bytes, but the data is stored on the last 2.
         soc = struct.unpack('>H', raw_soc[1]+raw_soc[3])[0]
         logger.info("The current battery soc is {}%".format(soc))
-    else:
-        soc = 0
-        logger.warn("Unable to get the battery state of charge")
     return soc
 
 

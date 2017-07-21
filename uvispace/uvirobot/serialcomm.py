@@ -61,6 +61,7 @@ class SerMesProtocol(Serial):
     R_CAP_MSG = '\x04'
     TEMP_MSG = '\x05'
     CURR_MSG = '\x06'
+    BAT_ERR = '\x07'
     # master-to-slave function codes
     READY = '\x04'
     MOVE = '\x05'
@@ -161,6 +162,8 @@ class SerMesProtocol(Serial):
         else:
             if fun_code == self.SOC_MSG:
                 soc = data
+            elif fun_code == self.BAT_ERR:
+                soc = -1
         return soc
 
     # -------------MASTER-SLAVE COMMANDS AUXILIAR FUNCTIONS------------- #
