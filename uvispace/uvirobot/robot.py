@@ -3,9 +3,8 @@
 
 It contains a class, *RobotController*, that represents a real UGV, and
 contains functionality for publishing new speed values, UGVs
-attributes, such as the *robot_id*, its speed values, or an instance
-of the *PathTracker*, for calculating and storing the robot navigation
-values.
+attributes such as the *robot_id* or its speed values. It imports
+*pathtracker*, for calculating the robot navigation values.
 """
 # Standard libraries
 import ast
@@ -34,7 +33,25 @@ logger = logging.getLogger("navigator")
 class RobotController(object):
     """This class contains methods needed to control a robot's behavior.
 
-    :param int robot_id: Identifier of the robot
+    :param int robot_id: identifier of the robot.
+    :param bool init: indicates if the instance has been initialized or
+     not.
+    :param dict speed_status: dictionary with iteration values of the
+     kalman filter, linear and angular speeds, and UGV setpoints.
+    :param goal_points: array that stores the following M goal points
+     for the UGV.
+    :type goal_points: numpy.array float64 (shape=Mx2).
+    :param float beta: angle of the line between the UGV and the next
+     goal point. The value is in radians.
+    :param float epsilon: difference between beta angle and UGV angle
+     (theta). Angle error to correct. The value is in radians.
+    :param float accepted_angle: accepted value of angle error to
+     consider that there is no error. The value is in grades.
+    :param float distance: distance between UGV and the next goal point
+     in millimeters.
+    :param float accepted_distance: accepted value of distance between
+     UGV and the next goal point to consider that there is no error. The
+     value is in millimeters.
     """
 
     def __init__(self, robot_id=1):
@@ -42,21 +59,18 @@ class RobotController(object):
         self.robot_id = robot_id
         self.init = False
         self.speed_status = {
-            # Kalman filter iterator counter.
             'step': 0,
             'linear': 0.0,
             'angular': 0.0,
             'sp_left': 127,
             'sp_right': 127,
         }
-        # Array with goals.
         self.goal_points = np.array([None, None]).reshape(1,2)
-        # Angle between target UGV.
         self.beta = 0
-        # Distance between target UGV.
+        self.epsilon = 0
+        self.accepted_angle = 10
         self.distance = 0
-        # Angle error permited, in grades.
-        self.angle = 15
+        self.accepted_distance = 70
         # Load the config file and read the polynomial coeficients
         self.conf = ConfigParser.ConfigParser()
         self.conf_file = glob.glob("./resources/config/robot{}.cfg"
@@ -81,7 +95,6 @@ class RobotController(object):
         self.speed_publisher = zmq.Context.instance().socket(zmq.PUB)
         self.speed_publisher.bind("tcp://*:{}".format(
                 int(os.environ.get("UVISPACE_BASE_PORT_SPEED"))+robot_id))
-        self.first = True
 
     def set_speed(self, pose):
         """Receive a new pose and calculate a speed value.
@@ -95,49 +108,41 @@ class RobotController(object):
         """
         if not self.init:
             self.init = True
+            linear = 0
+            angular = 0
         elif not self.goal_points.all() == None:
+            # There is a goal point.
             current_point = (pose['x'], pose['y'])
-            # Calculate the angle between target UGV.
-            self.beta = pathtracker.target_angle(current_point,
-                                                  self.goal_points)
-            # Change range of angle UGV: (-pi, pi)->(0, 2*pi).
+            next_point = self.goal_points[0, :]
+            self.beta = pathtracker.get_segment_angle(next_point, current_point)
+            # Change range of angle UGV: (-pi, pi) to (0, 2*pi).
             if pose['theta'] < 0:
-                self.theta = pose['theta'] + 2 * np.pi
+                self.theta = pose['theta'] + 2*np.pi
             else:
                 self.theta = pose['theta']
-            # Change UGV orientation.
-            if ((np.abs(self.beta - self.theta)) >
-                np.abs(self.angle * np.pi / 180)):
-                linear, angular = pathtracker.match_orientation(self.beta,
-                                                                    self.theta)
-            else:
-                next_point = self.goal_points[0, :]
-                self.distance = pathtracker.target_dist(next_point,
-                                                         current_point)
-                linear, angular = pathtracker.lin_ang_values(self.distance)
-                if (linear == 0 and angular == 0):
-                    self.goal_points = pathtracker.delete_point(
-                                                               self.goal_points)
-            self.robot_speed.set_speed([linear, angular], 'linear_angular')
-            logger.info('Pose--> X: {:1.4f}, Y: {:1.4f}, theta: {:1.4f} - '
-                        'Speeds--> Linear: {:4.2f}, Angular {:4.2f}, Step {}'
-                        .format(pose['x'], pose['y'], pose['theta'], linear,
-                                angular, pose['step']))
-            # Temporary.
-            print 'goal: {}'.format(self.goal_points[0, :])
-            print 'goals: {}'.format(self.goal_points)
-            print 'distance: {}'.format(self.distance)
-            print 'beta: {}'.format(self.beta)
-            print 'theta: {}'.format(self.theta)
-            a = np.abs(self.beta - self.theta)
-            print 'diff_angle: {}'.format(a)
-            print 'linear: {}'.format(linear)
-            print 'angular: {}'.format(angular)
-            sp_left, sp_right = self.get_setpoints(linear, angular)
-            self.publish_message(pose['step'], linear, angular, sp_left, sp_right)
+            # Correct UGV orientation.
+            self.epsilon = pathtracker.get_diff_angle(self.beta, self.theta)
+            linear, angular = pathtracker.match_orientation(self.epsilon)
+            # Calculate distance to next goal point.
+            segment = next_point - current_point
+            self.distance = np.sqrt(segment[0]**2 + segment[1]**2)
+            # Check distance to next goal point.
+            if self.distance < self.accepted_distance:
+                self.delete_goal()
+            # Straight movement if the angle is correct.
+            if np.abs(self.epsilon) < (self.accepted_angle* np.pi / 180):
+                linear, angular = pathtracker.get_fwd_spd(self.distance)
         else:
-            sp_left, sp_right = self.get_setpoints(0, 0)
-            print 'Waiting for a pose...'
+            linear = 0
+            angular = 0
+            logger.info('Waiting for a goal...')
+        self.robot_speed.set_speed([linear, angular], 'linear_angular')
+        logger.info('Pose--> X: {:1.4f}, Y: {:1.4f}, theta: {:1.4f} - '
+                    'Speeds--> Linear: {:4.2f}, Angular {:4.2f}, Step {}'
+                    .format(pose['x'], pose['y'], pose['theta'], linear, 
+                            angular, pose['step']))
+        sp_left, sp_right = self.get_setpoints(linear, angular)
+        self.publish_message(pose['step'], linear, angular, sp_left, sp_right)
         return
 
     def get_setpoints(self, linear, angular):
@@ -145,16 +150,18 @@ class RobotController(object):
 
         :param float linear: linear speed value.
         :param float angular: angular speed value.
+        :return: setpoints values.
+        :rtype: (int, int)
         """
         # Get the right and left speeds in case of direct movement
         if linear > 60:
             sp_left = self.robot_speed.poly_sol_left_fwd.solve(linear, angular)
             sp_right = self.robot_speed.poly_sol_right_fwd.solve(linear,
-                                                                        angular)
+                                                                 angular)
         else:
             sp_left = self.robot_speed.poly_sol_left_turn.solve(linear, angular)
             sp_right = self.robot_speed.poly_sol_right_turn.solve(linear,
-                                                                        angular)
+                                                                  angular)
         return (sp_left, sp_right)
 
     def publish_message(self, step, linear, angular, sp_left, sp_right):
@@ -175,7 +182,7 @@ class RobotController(object):
         return
 
     def new_goal(self, goal):
-        """Receives a new goal and calculates the path to reach it.
+        """Receives a new goal and stores it in goal points array.
 
         :param goal: contains a 2-D position, with 2 cartesian values
         (x,y) and an angle value (theta).
@@ -183,8 +190,7 @@ class RobotController(object):
         """
         if self.init:
             goal_point = (goal['x'], goal['y'])
-            # Adds the new goal to the current path, calculating all the
-            # intermediate points and stacking them to the path array
+            # Adds the new goal to goal points array.
             if self.goal_points.all() == None:
                 self.goal_points = np.array([goal_point]).reshape(1,2)
             else:
@@ -194,6 +200,22 @@ class RobotController(object):
         else:
             logger.info('The system is not yet initialized, '
                         'waiting for a pose to be published.')
+        return
+
+    def delete_goal(self):
+        """Delete the next goal point of the array
+
+        The next goal point is in the first row of the array. Deleted
+        when destination is reached.
+        """
+        data_array = self.goal_points
+        if data_array.shape[0] == 1:
+            # If the data matrix only contain one data.
+            data_array = np.array([None, None]).reshape(1,2)
+        else:
+            data_array = data_array[1:, :]
+        self.goal_points = data_array
+        return
 
     def on_shutdown(self):
         """Shutdown method. Is called when execution is aborted."""

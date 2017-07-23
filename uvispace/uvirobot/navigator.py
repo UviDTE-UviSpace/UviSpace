@@ -35,23 +35,15 @@ logger = logging.getLogger('navigator')
 def make_a_rectangle(my_robot):
     """Set the robot path to a rectangle of fixed vertices."""
     logger.info("Creating rectangle path")
-    # point_a = {'x': 1000, 'y': 1000}
-    # point_b = {'x': -1000, 'y': 1000}
-    # point_c = {'x': -1000, 'y': -1000}
-    # point_d = {'x': 1000, 'y': -1000}
-    point_e = {'x': 750, 'y': -600}
-    point_a = {'x': -750, 'y': -600}
-    point_b = {'x': -750, 'y': 700}
-    point_c = {'x': -1400, 'y': 700}
-    point_d = {'x': -1400, 'y': -600}
-    my_robot.new_goal(point_e)
+    point_a = {'x': 1000, 'y': 1000}
+    point_b = {'x': -1000, 'y': 1000}
+    point_c = {'x': -1000, 'y': -1000}
+    point_d = {'x': 1000, 'y': -1000}
     my_robot.new_goal(point_a)
     my_robot.new_goal(point_b)
     my_robot.new_goal(point_c)
     my_robot.new_goal(point_d)
-    my_robot.new_goal(point_a)
     return
-
 
 def init_sockets(robot_id):
     """Initializes the subscriber sockets in charge of listening for data."""
@@ -76,7 +68,6 @@ def init_sockets(robot_id):
     }
     return sockets
 
-
 def listen_sockets(sockets, my_robot):
     """Listens on subscriber sockets for messages of positions and goals."""
     global run_program
@@ -100,7 +91,6 @@ def listen_sockets(sockets, my_robot):
             goal = sockets['goal_subscriber'].recv_json()
             logger.debug("Received new goal: {}".format(goal))
             my_robot.new_goal(goal)
-
 
 def main():
     logger.info("BEGINNING EXECUTION")
@@ -143,8 +133,6 @@ def main():
                 sys.exit()
             if opt == "--rectangle":
                 rectangle_path = True
-    #TODO FIX!
-    rectangle_path = True
     # Calls the main function
     my_robot = RobotController(robot_id)
 
@@ -168,9 +156,6 @@ def main():
     # This function sends 4 rectangle points to the robot path.
     if rectangle_path:
         make_a_rectangle(my_robot)
-
-
-
     # Listen sockets
     listen_sockets(sockets, my_robot)
     # Once the run flag has been set to False, shutdown
@@ -189,9 +174,7 @@ def main():
     #         np.savetxt(f, my_robot.QCTracker.route, fmt='%.2f')
     #     # Plots the robot ideal path.
     #     plotter.path_plot(my_robot.QCTracker.path, my_robot.QCTracker.route)
-
     return
-
 
 if __name__ == '__main__':
     main()

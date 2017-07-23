@@ -51,6 +51,14 @@ LOGGING = {
                     time.strftime("%Y%m%d_%H%M%S"))),
             'delay': True
         },
+        'file_speed': {
+            'level': 'DEBUG',
+            'formatter': 'thread_verbose',
+            'class': 'logging.FileHandler',
+            'filename': os.path.join(log_path, 'speed_{}.log'.format(
+                    time.strftime("%Y%m%d_%H%M%S"))),
+            'delay': True
+        },
         'console': {
             'level': 'INFO',
             'formatter': 'simple',
@@ -68,6 +76,10 @@ LOGGING = {
         },
         'sensor': {
             'handlers': ['file_sensor', 'console'],
+            'level': 'DEBUG'
+        },
+        'speed': {
+            'handlers': ['file_speed', 'console'],
             'level': 'DEBUG'
         }
     }

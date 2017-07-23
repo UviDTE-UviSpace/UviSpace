@@ -514,6 +514,7 @@ def main():
         if opt == '-h':
             print help_msg
             sys.exit()
+        #TODO Fix error.    
         if opt in ("-s", "--save2file"):
             save2file = True
         else:

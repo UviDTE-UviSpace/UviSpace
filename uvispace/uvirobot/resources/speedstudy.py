@@ -29,7 +29,11 @@ except ImportError:
 # Logging setup.
 import settings
 
+logger = logging.getLogger('speed')
+
 def main():
+    logger.info("BEGINNING EXECUTION")
+
     # Main routine
     help_msg = ('Usage: speedstudy.py [-r <robot_id>], [--robotid=<robot_id>], '
                 '[-m <mode>], [--mode=<lin_ang/setpoints>]')
@@ -53,34 +57,37 @@ def main():
             if not mode in ('lin_ang', 'setpoints'):
                 print help_msg
                 sys.exit()
+    logger.info("Start")
     # Create an instance of SerMesProtocol and check connection to port.
     my_serial = messenger.connect_and_check(robot_id)
     # my_robot = RobotController(robot_id)
     if mode == 'lin_ang':
         # Equation degrees linear velocity 2 and angular velocity 2.
-        left_solver = PolySpeedSolver(coefs=(120.5, -0.2614, -93.01, 0.,
-                                             0.8996, 11.93))
-        right_solver = PolySpeedSolver(coefs=(134.5, 0.2614, 93.01, 0.,
-                                              -0.8996, -11.93))
+        left_solver = PolySpeedSolver(coefs=(120.5, -0.2614, -93.01, 0., 0.8996,
+                                             11.93))
+        right_solver = PolySpeedSolver(coefs=(134.5, 0.2614, 93.01, 0., -0.8996,
+                                              -11.93))
         #TODO Check correct values
         linear = float(raw_input("Enter the linear speed value\n"))
         angular = float(raw_input("Enter the angular speed value\n"))
-        sp_left = int(left_solver.solve(linear, angular))
-        sp_right = int(right_solver.solve(linear, angular))
+        sp_left = left_solver.solve(linear, angular)
+        sp_right = right_solver.solve(linear, angular)
     else:
-        sp_left = input("Introduce value of sp_left between 0 and 255\n")
-        sp_right = input("Introduce value of sp_right between 0 and 255\n")
-    operatingtime = float(raw_input("Enter the time to evaluate in seconds\n"))
+        sp_left = input("Enter value of sp_left between 0 and 255\n")
+        sp_right = input("Enter value of sp_right between 0 and 255\n")
+    operatingtime = float(raw_input("Enter the time to move in seconds\n"))
     init_time = time.time()
-    print "I am sending ({}, {})".format(sp_left, sp_right)
+    logger.info("Sent to UGV ({}, {})".format(sp_left, sp_right))
     while (time.time() - init_time) < operatingtime:
         my_serial.move([sp_right, sp_left])
-        print "I am sending ({}, {})".format(sp_left, sp_right)
+        logger.info("Sent to UGV ({}, {})".format(sp_left, sp_right))
     # When the desired time passes, the speed is zero
     sp_right = 127
     sp_left = 127
     my_serial.move([sp_right, sp_left])
-    print "I am sending ({}, {})".format(sp_left, sp_right)
+    logger.info("Sent to UGV ({}, {})".format(sp_left, sp_right))
+    logger.info("Shutting down")
+    return
 
 if __name__ == '__main__':
     main()
