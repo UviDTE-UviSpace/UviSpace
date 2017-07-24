@@ -4,6 +4,12 @@
 # Backup gedit files.
 **~
 
+# pycharm project data
+.idea
+
+# Atom linter-gcc config files
+*.gcc-flags.json
+
 # Log files
 **.log
 
