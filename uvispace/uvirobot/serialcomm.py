@@ -54,13 +54,22 @@ class SerMesProtocol(Serial):
     # message fields
     STX = '\x02'
     ETX = '\x03'
-    # slave-to-master answers
+    # slave-to-master function codes
     ACK_MSG = '\x01'
-    NACK_MSG = '\x02'
-    DONE_MSG = '\x03'
-    # master-to-slave orders
+    SOC_MSG = '\x02'
+    V_MSG = '\x03'
+    R_CAP_MSG = '\x04'
+    TEMP_MSG = '\x05'
+    CURR_MSG = '\x06'
+    BAT_ERR = '\x07'
+    # master-to-slave function codes
     READY = '\x04'
     MOVE = '\x05'
+    GET_SOC = '\x06'
+    GET_V = '\x07'
+    GET_R_CAP = '\x08'
+    GET_TEMP = '\x09'
+    GET_CURR = '\x0A'
 
     def __init__(self, port,
                  baudrate,
@@ -75,7 +84,7 @@ class SerMesProtocol(Serial):
                         timeout=timeout)
         # IDs of the master and slave.                
         self.MASTER_ID = '\x01'
-        self.SLAVE_ID = '\x02'
+        self.SLAVE_ID = '\x01'
         if self._isOpen:
             self.flushInput()
 
@@ -131,15 +140,31 @@ class SerMesProtocol(Serial):
         # send configuration messager
         self.send_message(SerMesProtocol.MOVE, char_sp)
         # wait for the response from the device
-        result = self.read_message()
-        if (result == 0):  # if an error was detected
-            return 0
+        Rx_OK, fun_code, length, data = self.read_message()
+        # If the Rx_OK field was not asserted, raise an error
+        if Rx_OK is False:
+            logger.error('Unsuccessfull communication')
+            return False
         else:  # no errors
-            fun_code = result[1]
-            if fun_code:
+            if fun_code == self.ACK_MSG:
                 return True
             else:
                 return False
+
+    def get_soc(self):
+        """Get the State of Charge (SoC) of the vehicle battery."""
+        soc = None
+        self.send_message(self.GET_SOC)
+        Rx_OK, fun_code, length, data = self.read_message()
+        # If the Rx_OK field was not asserted, raise an error
+        if Rx_OK is False:
+            logger.error('Unsuccessfull communication')
+        else:
+            if fun_code == self.SOC_MSG:
+                soc = data
+            elif fun_code == self.BAT_ERR:
+                soc = -1
+        return soc
 
     # -------------MASTER-SLAVE COMMANDS AUXILIAR FUNCTIONS------------- #
     def send_message(self, fun_code, data='', send_delay=0.01):
@@ -163,7 +188,7 @@ class SerMesProtocol(Serial):
                 sent_data=data,
                 etx=self.ETX)
         # sends message.
-        logger.info('sending... {}'.format(
+        logger.debug('sending... {}'.format(
                 " ".join(hex(ord(n)) for n in message)))
         self.write(message)
 
@@ -208,23 +233,23 @@ class SerMesProtocol(Serial):
         # is data available in the 2 length bytes.
         try:
             length = struct.unpack('>H', self.read(2))[0]
+        # TODO specify the exception.
         except:
             logger.error('Received length bytes are not valid')
             return (Rx_OK, fun_code, length, data)
-        logger.info('received data length = {}'.format(length))
+        logger.debug('received data length = {}'.format(length))
 
         # Reading of the function code and the main data
         fun_code = self.read(1)
         for i in range(length):
-            data = '{previous_data} {new_data}'.format(previous_data=data,
+            data = '{previous_data}{new_data}'.format(previous_data=data,
                                                        new_data=self.read(1))
         # Reading of the last byte, corresponding to end of transmission check.
         _ETX = self.read(1)
 
         # Check of message validity
-        if (_STX == self.STX) and (_ETX == self.ETX) \
-                and (id_dest == self.MASTER_ID):
-            logger.info('Succesfull communication')
+        if (_ETX == self.ETX) and (id_dest == self.MASTER_ID):
+            logger.debug('Succesfull communication')
             Rx_OK = True
         elif _ETX != SerMesProtocol.ETX:
             logger.error('Error, ETX was not found')

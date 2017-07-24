@@ -74,8 +74,8 @@ def connect_and_check(robot_id, port=None, baudrate=57600):
     return serialcomm
 
 
-def listen_speed_set_points(my_serial, robot_id, wait_times, speed_calc_times,
-                            xbee_times):
+def listen_speed_set_points(my_serial, robot_id, robot_speed, speed_calc_times,
+                            wait_times, xbee_times, soc_read_interval=5):
     """Listens for new speed set point messages on a subscriber socket."""
     logger.debug("Initializing subscriber socket")
     # Open a subscribe socket to listen speed directives
@@ -88,13 +88,19 @@ def listen_speed_set_points(my_serial, robot_id, wait_times, speed_calc_times,
             int(os.environ.get("UVISPACE_BASE_PORT_SPEED"))+robot_id))
 
     logger.debug("Listening for speed set points")
+    # Initialize the time for checking if the soc has to be read.
+    soc_time = time.time()
     # listen for speed directives until interrupted
     try:
         while True:
             data = speed_subscriber.recv_json()
             logger.debug("Received new speed set point: {}".format(data))
-            move_robot(data, my_serial, wait_times, speed_calc_times, 
-                       xbee_times)
+            move_robot(data, my_serial, wait_times, speed_calc_times,
+                       xbee_times, robot_speed)
+            # Read the battery state-of-charge after regular seconds intervals.
+            if (time.time()-soc_time) > soc_read_interval:
+                read_battery_soc(my_serial)
+                soc_time = time.time()
     except KeyboardInterrupt:
         pass
     # Cleanup resources
@@ -117,8 +123,23 @@ def move_robot(data, my_serial, wait_times, speed_calc_times, xbee_times):
     my_serial.move([sp_right, sp_left])
     t0 = time.time()
     xbee_times.append(t0 - t2)
-    logger.info('Transmission ended successfully')
-    return
+    logger.debug('Transmission ended successfully')
+
+
+def read_battery_soc(my_serial):
+    """Send a petition to the slave for returning the battery SOC"""
+    raw_soc = my_serial.get_soc()
+    if raw_soc is None:
+        soc = 0
+        logger.warn("Unable to get the battery state of charge")
+    elif raw_soc == -1:
+        soc = 0
+        logger.warn("Fuel gauge PCB not detected")
+    else:
+        # The soc variable are 4 bytes, but the data is stored on the last 2.
+        soc = struct.unpack('>H', raw_soc[1]+raw_soc[3])[0]
+        logger.info("The current battery soc is {}%".format(soc))
+    return soc
 
 
 def stop_vehicle(my_serial, wait_times, speed_calc_times, xbee_times):
