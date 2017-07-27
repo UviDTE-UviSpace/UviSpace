@@ -74,7 +74,7 @@ def connect_and_check(robot_id, port=None, baudrate=57600):
     return serialcomm
 
 
-def listen_speed_set_points(my_serial, robot_id, robot_speed, speed_calc_times,
+def listen_speed_set_points(my_serial, robot_id, speed_calc_times,
                             wait_times, xbee_times, soc_read_interval=5):
     """Listens for new speed set point messages on a subscriber socket."""
     logger.debug("Initializing subscriber socket")
@@ -96,7 +96,7 @@ def listen_speed_set_points(my_serial, robot_id, robot_speed, speed_calc_times,
             data = speed_subscriber.recv_json()
             logger.debug("Received new speed set point: {}".format(data))
             move_robot(data, my_serial, wait_times, speed_calc_times,
-                       xbee_times, robot_speed)
+                       xbee_times)
             # Read the battery state-of-charge after regular seconds intervals.
             if (time.time()-soc_time) > soc_read_interval:
                 read_battery_soc(my_serial)
@@ -124,6 +124,7 @@ def move_robot(data, my_serial, wait_times, speed_calc_times, xbee_times):
     t0 = time.time()
     xbee_times.append(t0 - t2)
     logger.debug('Transmission ended successfully')
+    return
 
 
 def read_battery_soc(my_serial):
