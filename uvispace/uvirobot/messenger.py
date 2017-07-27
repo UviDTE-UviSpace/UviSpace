@@ -124,7 +124,7 @@ def move_robot(data, my_serial, wait_times, speed_calc_times, xbee_times):
     t0 = time.time()
     xbee_times.append(t0 - t2)
     logger.debug('Transmission ended successfully')
-    return (sp_left, sp_right)
+    return
 
 
 def read_battery_soc(my_serial):
