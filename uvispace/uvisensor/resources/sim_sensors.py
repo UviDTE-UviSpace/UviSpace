@@ -47,7 +47,7 @@ def main():
     # This try/except clause forces to give the robot_id argument.
     try:
         opts, args = getopt.getopt(sys.argv[1:], "hx:y:t:", ["pose_x=",
-                                   "pose_y", "pose_theta="])
+                                   "pose_y=", "pose_theta="])
     except getopt.GetoptError:
         print(help_msg)
     if not opts:

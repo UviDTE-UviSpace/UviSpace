@@ -35,15 +35,17 @@ logger = logging.getLogger('navigator')
 def make_a_rectangle(my_robot):
     """Set the robot path to a rectangle of fixed vertices."""
     logger.info("Creating rectangle path")
-    point_a = {'x': 1000, 'y': 1000}
-    point_b = {'x': -1000, 'y': 1000}
-    point_c = {'x': -1000, 'y': -1000}
-    point_d = {'x': 1000, 'y': -1000}
+    point_a = {'x': -750, 'y': -1000}
+    point_b = {'x': -750, 'y': 1000}
+    point_c = {'x': -1400, 'y': 1000}
+    point_d = {'x': -1400, 'y': -1000}
     my_robot.new_goal(point_a)
     my_robot.new_goal(point_b)
     my_robot.new_goal(point_c)
     my_robot.new_goal(point_d)
+    my_robot.new_goal(point_a)
     return
+
 
 def init_sockets(robot_id):
     """Initializes the subscriber sockets in charge of listening for data."""
@@ -68,6 +70,7 @@ def init_sockets(robot_id):
     }
     return sockets
 
+
 def listen_sockets(sockets, my_robot):
     """Listens on subscriber sockets for messages of positions and goals."""
     global run_program
@@ -91,6 +94,7 @@ def listen_sockets(sockets, my_robot):
             goal = sockets['goal_subscriber'].recv_json()
             logger.debug("Received new goal: {}".format(goal))
             my_robot.new_goal(goal)
+
 
 def main():
     logger.info("BEGINNING EXECUTION")
@@ -164,16 +168,15 @@ def main():
     for socket in sockets:
         sockets[socket].close()
     # Plot results
-    ##TODO Necesary adapt this function to the new path tracker.
-    # if my_robot.QCTracker.path is not None:
-    #     # Print the log output to files and plot it
-    #     script_path = os.path.dirname(os.path.realpath(__file__))
-    #     # A file identifier is generated from the current time value
-    #     file_id = time.strftime('%Y%m%d_%H%M')
-    #     with open('{}/tmp/path_{}.log'.format(script_path, file_id), 'a') as f:
-    #         np.savetxt(f, my_robot.QCTracker.route, fmt='%.2f')
-    #     # Plots the robot ideal path.
-    #     plotter.path_plot(my_robot.QCTracker.path, my_robot.QCTracker.route)
+    if my_robot.path.all() is not None:
+        # Print the log output to files and plot it
+        script_path = os.path.dirname(os.path.realpath(__file__))
+        # A file identifier is generated from the current time value
+        file_id = time.strftime('%Y%m%d_%H%M')
+        with open('{}/tmp/path_{}.log'.format(script_path, file_id), 'a') as f:
+            np.savetxt(f, my_robot.route, fmt='%.2f')
+        # Plots the robot ideal path.
+        plotter.path_plot(my_robot.path, my_robot.route)
     return
 
 if __name__ == '__main__':

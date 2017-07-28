@@ -135,10 +135,10 @@ class Speed(object):
         self.set_speed(speed, spd_format)
         # Solves equations with different coefficients. Coefficients depends on
         # direction (forward or backward) or turn itself.
-        self.poly_sol_left_fwd = PolySpeedSolver()
-        self.poly_sol_right_fwd = PolySpeedSolver()
-        self.poly_sol_left_turn = PolySpeedSolver()
-        self.poly_sol_right_turn = PolySpeedSolver()
+        self.left_fwd_solver = PolySpeedSolver()
+        self.right_fwd_solver = PolySpeedSolver()
+        self.left_turn_solver = PolySpeedSolver()
+        self.right_turn_solver = PolySpeedSolver()
 
     def set_speed(self, speed, speed_format, speed_scale='linear'):
         """Set a new speed value.

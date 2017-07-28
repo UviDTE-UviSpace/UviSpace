@@ -5,11 +5,20 @@ This module allows the UGV to move at a constant speed for a given time.
 These values are required to the user.
 
 There are two possible modes of operation:
+
 -(lin_ang) Linear and angular speeds that transform into setpoints by
-solving a polynomial equation.
+solving a polynomial equation. The coefficients of the equation will be
+read from the modelrobot.cfg file in 'config' directory. This file can
+be modified by the user introducing these coefficients in the section
+'Coefficients'. It is necessary to introduce coefficients for the left
+and right setpoints.
+
 -(setpoints) Introduction of setpoints directly.
 """
 # Standard libraries
+import ast
+import ConfigParser
+import glob
 import getopt
 import logging
 import numpy as np
@@ -29,14 +38,18 @@ except ImportError:
 # Logging setup.
 import settings
 
-logger = logging.getLogger('speed')
+logger = logging.getLogger('speedstudy')
 
 def main():
     logger.info("BEGINNING EXECUTION")
 
     # Main routine
-    help_msg = ('Usage: speedstudy.py [-r <robot_id>], [--robotid=<robot_id>], '
-                '[-m <mode>], [--mode=<lin_ang/setpoints>]')
+    help_msg = ('Usage: speedstudy.py [-r <robot_id>], [--robotid=<robot_id>],'
+                '[-m <mode>], [--mode=<lin_ang/setpoints>]\n'
+                'There are two possible modes of operation:\n'
+                '-(lin_ang) Linear and angular speeds that transform into'
+                'setpoints by solving a polynomial equation (see help section).'
+                '\n-(setpoints) Introduction of setpoints directly.')
     # This try/except clause forces to give the robot_id argument.
     try:
         opts, args = getopt.getopt(sys.argv[1:], "hr:m:", ["robotid=", "mode="])
@@ -62,11 +75,15 @@ def main():
     my_serial = messenger.connect_and_check(robot_id)
     # my_robot = RobotController(robot_id)
     if mode == 'lin_ang':
+        conf = ConfigParser.ConfigParser()
+        conf_file = glob.glob("./config/modelrobot.cfg")
+        conf.read(conf_file)
+        # Coefficients for a movement.
+        left_coefs = ast.literal_eval(conf.get('Coefficients', 'coefs_left'))
+        right_coefs = ast.literal_eval(conf.get('Coefficients', 'coefs_right'))
         # Equation degrees linear velocity 2 and angular velocity 2.
-        left_solver = PolySpeedSolver(coefs=(120.5, -0.2614, -93.01, 0., 0.8996,
-                                             11.93))
-        right_solver = PolySpeedSolver(coefs=(134.5, 0.2614, 93.01, 0., -0.8996,
-                                              -11.93))
+        left_solver = PolySpeedSolver(coefs=left_coefs)
+        right_solver = PolySpeedSolver(coefs=right_coefs)
         #TODO Check correct values
         linear = float(raw_input("Enter the linear speed value\n"))
         angular = float(raw_input("Enter the angular speed value\n"))
@@ -80,7 +97,6 @@ def main():
     logger.info("Sent to UGV ({}, {})".format(sp_left, sp_right))
     while (time.time() - init_time) < operatingtime:
         my_serial.move([sp_right, sp_left])
-        logger.info("Sent to UGV ({}, {})".format(sp_left, sp_right))
     # When the desired time passes, the speed is zero
     sp_right = 127
     sp_left = 127
