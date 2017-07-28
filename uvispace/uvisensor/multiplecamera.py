@@ -501,23 +501,19 @@ def main():
     :return:
     """
     # Main routine
-    help_msg = ("Usage: multiplecamera.py [-s / --save2file],")
+    save2file = False
+    help_msg = ("Usage: multiplecamera.py [-s | --save2file],")
     # This try/except clause forces to give the robot_id argument.
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "hs:", ["save="])
+        opts, args = getopt.getopt(sys.argv[1:], "hs", ["save2file"])
     except getopt.GetoptError:
         print(help_msg)
-    if not opts:
-        print help_msg
-        sys.exit()
     for opt, arg in opts:
         if opt == '-h':
             print help_msg
             sys.exit()
         if opt in ("-s", "--save2file"):
             save2file = True
-        else:
-            save2file = False
     logger.info("BEGINNING MAIN EXECUTION")
     # Get the relative path to all the config files stored in /config folder.
     conf_files = glob.glob("./resources/config/*.cfg")
